@@ -499,6 +499,142 @@ Nach einer Änderung an `network.listen` muss `setup-rpi.sh` erneut ausgeführt 
 2. Hamburger-Menü → Import → Datei wählen: `node-red/flows/flows.json`
 3. Deploy klicken
 
+## Kalender-Integration
+
+Mehrere Kalenderquellen (Google, Nextcloud, Office 365) werden in Node-RED abgerufen,
+normalisiert und via MQTT an das Frontend gepusht. Das Frontend filtert nach dem aktiven
+Profil und zeigt die Termine als Tages-Agenda an.
+
+### Architektur
+
+```
+Node-RED (Zentralserver)
+  ├─ Google Calendar    (ICS-Feed)       ──┐
+  ├─ Nextcloud CalDAV   (CalDAV)          ├─► Normalize ─► Merge & Sort ─► MQTT publish
+  └─ Office 365         (ICS-Feed)       ──┘
+
+MQTT: dashboard/panels/<panel_id>/calendar/state
+  payload: { events: [...], profile: "alles" }
+
+Frontend
+  ├─ CalendarWidget  → Sidebar im Hauptmenü (Heute)
+  └─ CalendarView    → Vollbild-Wochenansicht
+```
+
+### Node-RED Setup
+
+#### 1. Paket installieren
+
+```bash
+# Im Node-RED-Verzeichnis (Standard: ~/.node-red)
+npm install node-red-contrib-ical-events
+# Node-RED neu starten
+systemctl restart nodered
+```
+
+#### 2. Flow importieren
+
+1. Node-RED UI öffnen: `http://zentralserver:1880/red`
+2. Hamburger-Menü → Import → Datei: `node-red/flows/calendar-addon.json`
+3. In jedem `ical-config`-Node die URLs/Credentials eintragen (siehe unten)
+4. Deploy klicken
+
+#### 3. Kalenderquellen konfigurieren
+
+**Google Calendar — ICS-Feed:**
+```
+Google Calendar → Einstellungen → Kalender auswählen → Kalender integrieren
+→ "Geheime Adresse im iCal-Format" kopieren
+→ In ical-config "google_family": URL eintragen, Typ: ical
+```
+
+**Nextcloud — CalDAV:**
+```
+URL-Schema: https://nextcloud.example.com/remote.php/dav/calendars/USERNAME/CALENDAR-NAME/
+Nextcloud: Einstellungen → Sicherheit → App-Passwörter erstellen
+→ In ical-config "nextcloud_work": URL + Benutzername + App-Passwort eintragen
+```
+
+**Office 365 — ICS-Feed:**
+```
+Outlook Web → Kalender → Kalender-Einstellungen → Veröffentlichen
+→ ICS-Link kopieren
+→ In ical-config "office365_shared": URL eintragen, Typ: ical
+Hinweis: Sync-Verzögerung bis 3h möglich. Für Echtzeit → Microsoft Graph API (msgraph-node)
+```
+
+#### 4. Weitere Panels hinzufügen
+
+Im `cal_publish_loop`-Function-Node die `panels`-Liste erweitern:
+```js
+const panels = ['kitchen', 'wohnzimmer'];
+```
+
+### Frontend-Konfiguration (`panel.json`)
+
+```json
+"calendars": {
+  "sources": {
+    "google_family": { "name": "Familie", "color": "#4285F4" },
+    "nextcloud_work": { "name": "Arbeit",  "color": "#0082C9" },
+    "office365_shared": { "name": "Firma", "color": "#D83B01" }
+  },
+  "profiles": [
+    { "id": "alles",  "name": "Alles",  "sources": ["google_family", "nextcloud_work", "office365_shared"] },
+    { "id": "privat", "name": "Privat", "sources": ["google_family"] },
+    { "id": "arbeit", "name": "Arbeit", "sources": ["nextcloud_work", "office365_shared"] }
+  ],
+  "lookahead_days": 7
+}
+```
+
+Die `source`-IDs in `panel.json` müssen mit den Source-IDs in den `ical-config`-Nodes in
+Node-RED übereinstimmen (z.B. `google_family`).
+
+### Farben und Profile am Kiosk
+
+- **Profil wechseln**: Buttons über der Terminliste → sofortiger Wechsel (lokal) + MQTT-Publish
+- **Farben ändern**: ⚙-Icon → Einstellungen-Modal → Farbkreis pro Kalender antippen → Speichern
+- **Neues Profil erstellen**: Einstellungen → „+ Neues Profil" → Name eingeben → Quellen anklicken
+- Farben und selbst erstellte Profile werden in `localStorage` gespeichert (überleben Seiten-Reload, nicht Systemstart)
+- Dauerhafte Defaults: in `panel.json` → `calendars.sources[id].color` und `calendars.profiles`
+
+### Event-Datenformat (MQTT-Payload von Node-RED)
+
+```json
+{
+  "events": [
+    {
+      "uid": "abc123@google.com",
+      "title": "Team Standup",
+      "start": "2026-05-17T09:00:00+02:00",
+      "end":   "2026-05-17T09:30:00+02:00",
+      "allDay": false,
+      "location": "Konferenzraum",
+      "source": "google_family"
+    }
+  ],
+  "profile": "alles"
+}
+```
+
+### MQTT-Topics (Kalender)
+
+| Topic | Richtung | Payload |
+|-------|----------|---------|
+| `dashboard/panels/<id>/calendar/state` | NR → Frontend | `{ events: [...], profile: "name" }` |
+| `dashboard/panels/<id>/calendar/profile/set` | Frontend → NR | `{ profile: "privat" }` |
+
+### Komponenten-Übersicht
+
+| Komponente | Datei | Beschreibung |
+|-----------|-------|-------------|
+| `CalendarWidget` | `components/CalendarWidget/CalendarWidget.jsx` | Kompakte Sidebar im Hauptmenü |
+| `CalendarView` | `views/CalendarView.jsx` | Vollbild-Wochenansicht |
+| `EventList` | `components/CalendarWidget/EventList.jsx` | Terminliste (wiederverwendbar) |
+| `ProfileSelector` | `components/CalendarWidget/ProfileSelector.jsx` | Profil-Buttons |
+| `CalendarSettings` | `components/CalendarWidget/CalendarSettings.jsx` | Color Picker + Profil-Editor |
+
 ## Neuen View hinzufügen
 
 1. `frontend/src/views/MeinNeuerView.jsx` erstellen

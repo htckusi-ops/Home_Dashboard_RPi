@@ -21,6 +21,7 @@ function buildSubscriptions() {
     `${prefix}/quickmenu/state`,
     `${prefix}/override/state`,
     `${prefix}/keyboard/show`,
+    `${prefix}/calendar/state`,
     'dashboard/settings/global',
   ]
 }
@@ -93,6 +94,16 @@ function handleMessage(topic, payload) {
 
   if (topic === `${prefix}/keyboard/show`) {
     store.showKeyboard()
+    return
+  }
+
+  if (topic === `${prefix}/calendar/state`) {
+    if (data && Array.isArray(data.events)) {
+      store.setCalendarEvents(data.events)
+    }
+    if (data && data.profile) {
+      store.setCalendarProfile(data.profile)
+    }
     return
   }
 

@@ -1,5 +1,13 @@
 import { create } from 'zustand'
 
+function loadCalendarOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem('dashboard_calendar_settings') || 'null')
+  } catch {
+    return null
+  }
+}
+
 /**
  * @typedef {Object} PanelState
  * @property {string} panel_id
@@ -42,6 +50,11 @@ const usePanelStore = create((set, get) => ({
   keyboard_visible: false,
   mqtt_status: 'disconnected',
   config: null,
+
+  // Calendar
+  calendar_events: [],
+  calendar_profile: null,
+  calendar_overrides: loadCalendarOverrides(),
 
   setConfig: (config) => set({
     config,
@@ -104,6 +117,17 @@ const usePanelStore = create((set, get) => ({
   hideKeyboard: () => set({ keyboard_visible: false }),
 
   toggleKeyboard: () => set((state) => ({ keyboard_visible: !state.keyboard_visible })),
+
+  setCalendarEvents: (calendar_events) => set({ calendar_events }),
+
+  setCalendarProfile: (calendar_profile) => set({ calendar_profile }),
+
+  setCalendarOverrides: (overrides) => {
+    try {
+      localStorage.setItem('dashboard_calendar_settings', JSON.stringify(overrides))
+    } catch {}
+    set({ calendar_overrides: overrides })
+  },
 }))
 
 export default usePanelStore

@@ -10,6 +10,7 @@ import ClimateView from './views/ClimateView.jsx'
 import CamerasView from './views/CamerasView.jsx'
 import GrafanaView from './views/GrafanaView.jsx'
 import HomeAssistantView from './views/HomeAssistantView.jsx'
+import CalendarView from './views/CalendarView.jsx'
 
 function ViewRouter() {
   const { current_view } = usePanelStore()
@@ -27,6 +28,8 @@ function ViewRouter() {
       return <GrafanaView />
     case 'homeassistant':
       return <HomeAssistantView />
+    case 'calendar':
+      return <CalendarView />
     case 'main_menu':
     default:
       return <MainMenuView />

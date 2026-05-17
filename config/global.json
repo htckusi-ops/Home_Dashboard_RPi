@@ -28,6 +28,29 @@
     "room": "Küche",
     "coordinator_ip": "192.168.1.100"
   },
+  "calendars": {
+    "fetch_interval_minutes": 5,
+    "lookahead_days": 7,
+    "sources": {
+      "google_family": {
+        "type": "ical",
+        "url": "https://calendar.google.com/calendar/ical/CALENDAR_ID/private-TOKEN/basic.ics",
+        "_comment": "Google Calendar: Einstellungen → Kalender → Kalender integrieren → Geheime Adresse im iCal-Format"
+      },
+      "nextcloud_work": {
+        "type": "caldav",
+        "url": "https://nextcloud.example.com/remote.php/dav/calendars/USERNAME/CALENDAR/",
+        "username": "USERNAME",
+        "password": "${NC_CAL_PASSWORD}",
+        "_comment": "Nextcloud: Kalender-App → Teilen → App-Passwort unter Sicherheit → App-Passwörter"
+      },
+      "office365_shared": {
+        "type": "ical",
+        "url": "https://outlook.office365.com/owa/calendar/TOKEN/calendar.ics",
+        "_comment": "Office 365: Outlook Web → Kalender → Kalender veröffentlichen → ICS-URL kopieren"
+      }
+    }
+  },
   "scenes": {
     "yoga": {
       "id": "yoga",

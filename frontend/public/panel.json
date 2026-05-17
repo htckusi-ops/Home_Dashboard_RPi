@@ -64,5 +64,39 @@
       { "id": "classical", "name": "Klassik", "icon": "🎻" }
     ],
     "kids_max_volume": 50
+  },
+  "calendars": {
+    "sources": {
+      "google_family": {
+        "name": "Familie",
+        "color": "#4285F4"
+      },
+      "nextcloud_work": {
+        "name": "Arbeit",
+        "color": "#0082C9"
+      },
+      "office365_shared": {
+        "name": "Firma",
+        "color": "#D83B01"
+      }
+    },
+    "profiles": [
+      {
+        "id": "alles",
+        "name": "Alles",
+        "sources": ["google_family", "nextcloud_work", "office365_shared"]
+      },
+      {
+        "id": "privat",
+        "name": "Privat",
+        "sources": ["google_family"]
+      },
+      {
+        "id": "arbeit",
+        "name": "Arbeit",
+        "sources": ["nextcloud_work", "office365_shared"]
+      }
+    ],
+    "lookahead_days": 7
   }
 }
