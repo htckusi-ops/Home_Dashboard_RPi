@@ -155,6 +155,69 @@ Alle Panel-Topics haben das Präfix `dashboard/panels/<panel_id>/`.
 }
 ```
 
+## VPN — Externer Zugriff via pfSense OpenVPN
+
+Das Panel kann außerhalb des Heimnetzes über einen OpenVPN-Tunnel genutzt werden.
+Der Tunnel ist für die App vollständig transparent — `panel.json` bleibt unverändert,
+da das VPN dem RPi dieselbe Netzwerksicht wie im Heimnetz gibt.
+
+### Voraussetzungen
+
+- pfSense mit konfiguriertem OpenVPN-Server (Remote Access / User Auth)
+- VPN-Benutzer in pfSense angelegt (`System → User Manager`)
+- Öffentliche IP oder DynDNS für den pfSense-Router
+
+### Profil von pfSense exportieren
+
+1. pfSense → `VPN` → `OpenVPN` → `Client Export`
+2. Export Type: **Inline Configuration (.ovpn)**
+3. Profil-Datei als `config/vpn/dashboard.ovpn` im Repository ablegen
+   (die Datei wird durch `.gitignore` geschützt und nie ins Repo eingecheckt)
+
+### VPN auf dem RPi einrichten
+
+```bash
+# Einmalig nach dem RPi-Setup ausführen
+sudo ./scripts/setup-vpn.sh --profile config/vpn/dashboard.ovpn --user VPN_BENUTZERNAME
+
+# Passwort wird interaktiv abgefragt (oder via --password FLAG)
+```
+
+Das Skript:
+- Installiert `openvpn` und `resolvconf`
+- Kopiert das Profil nach `/etc/openvpn/client/dashboard.conf`
+- Speichert Credentials in `/etc/openvpn/client/dashboard.creds` (chmod 600)
+- Erstellt und aktiviert den systemd-Service `openvpn-client@dashboard`
+- VPN startet automatisch beim Boot
+
+### VPN-Verwaltung
+
+```bash
+# Status
+systemctl status openvpn-client@dashboard
+
+# Logs verfolgen
+journalctl -u openvpn-client@dashboard -f
+
+# VPN manuell stoppen/starten
+systemctl stop openvpn-client@dashboard
+systemctl start openvpn-client@dashboard
+
+# VPN deaktivieren (kein Autostart mehr)
+systemctl disable openvpn-client@dashboard
+
+# Profil aktualisieren (z.B. nach Zertifikatserneuerung)
+sudo ./scripts/setup-vpn.sh --profile config/vpn/neues_profil.ovpn --user BENUTZERNAME
+```
+
+### Hinweise
+
+- `config/vpn/*.ovpn`, `*.key`, `*.crt` und `credentials`-Dateien sind in `.gitignore`
+- Beispiel-Profilstruktur: `config/vpn/dashboard.ovpn.example`
+- Wenn kein VPN aktiv ist, verbindet sich das Panel nur im lokalen Netz
+- Touch-Wake und Display-Steuerung funktionieren weiterhin lokal am Gerät,
+  auch wenn der VPN-Tunnel kurz unterbrochen ist (MQTT reconnect-Mechanismus)
+
 ## Entwicklungs-Workflow
 
 ### Lokal entwickeln (ohne RPi, ohne zentralen Server)
