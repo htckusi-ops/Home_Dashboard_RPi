@@ -163,60 +163,143 @@ Alle Panel-Topics haben das Präfix `dashboard/panels/<panel_id>/`.
 }
 ```
 
-## Netzwerk — WiFi, Ethernet und VPN
+## Netzwerk — Profile, WiFi, Ethernet und VPN
 
-Der RPi unterstützt drei Netzwerkszenarien, die sich kombinieren lassen:
+### Update-Sicherheit der Netzwerkkonfiguration
 
-| Szenario | Uplink | Angebundene Geräte | VPN |
-|----------|--------|-------------------|-----|
-| Lokalbetrieb | eth0 oder wlan0 | — | optional |
-| Fernzugriff | wlan0/eth0 | — | ✓ → Heimnetz erreichbar |
-| Router-Modus | wlan0/eth0 | eth1 (USB-Adapter) | ✓ → Geräte im Heimnetz |
+Alle Dashboard-Konfigurationen liegen in Dateien, die Paket-Updates nie berühren:
 
-### Netzwerk-Topologie (Router-Modus mit VPN)
+| Komponente | Konfigurationspfad | Sicher vor Updates? |
+|------------|-------------------|---------------------|
+| Nginx | `/etc/nginx/sites-available/dashboard` | ✓ (eigene Datei) |
+| OpenVPN-Profil | `/etc/openvpn/client/dashboard.conf` | ✓ (eigene Datei) |
+| OpenVPN-Credentials | `/etc/openvpn/client/dashboard.creds` | ✓ (eigene Datei) |
+| nftables-Regeln | `/etc/nftables.d/dashboard-routing.nft` | ✓ (eigene Datei) |
+| nftables-Loader | `/etc/systemd/system/nftables.service.d/dashboard-routing.conf` | ✓ (Drop-in) |
+| IP-Forwarding | `/etc/sysctl.d/99-dashboard-routing.conf` | ✓ (Drop-in, nicht sysctl.conf) |
+| dnsmasq | `/etc/dnsmasq.d/dashboard-lan.conf` | ✓ (eigene Datei) |
+| hostapd | `/etc/hostapd/dashboard.conf` | ✓ (eigene Datei) |
+| NetworkManager | `/etc/NetworkManager/conf.d/dashboard-ap-unmanage.conf` | ✓ (eigene Datei) |
+
+**Kein Skript modifiziert `/etc/sysctl.conf`, `/etc/nftables.conf` oder andere vom Paketmanager verwaltete Dateien direkt.** Alle Erweiterungen erfolgen über Drop-ins und eigene Dateien in den jeweiligen `.d/`-Verzeichnissen.
+
+Nach `apt upgrade` kann es nötig sein, einen Service neu zu starten (`systemctl restart nftables`),
+aber keine Konfiguration geht verloren.
+
+---
+
+### Zwei wählbare Netzwerk-Profile
 
 ```
-Internet
+sudo ./scripts/setup-network-profile.sh --profile eth-wan     # Standard
+sudo ./scripts/setup-network-profile.sh --profile wifi-ap     # WLAN als Hotspot
+sudo ./scripts/setup-network-profile.sh --status              # Aktuelles Profil
+```
+
+#### Profil `eth-wan` — Ethernet als WAN (Standard)
+
+```
+Internet / Heimnetz
     │
     ▼
 ┌────────────────────────────────────────────┐
-│  pfSense                                    │
-│  OpenVPN-Server  10.8.0.0/24               │
-│  Heimnetz-LAN    192.168.1.0/24            │
-│                                             │
-│  Routing:                                   │
-│    10.8.0.10/32   → tun-RPi (feste VPN-IP) │
-│    172.16.100.0/24 → tun-RPi (Gerätesub)  │
+│  pfSense + OpenVPN-Server                  │
+│  Heimnetz: 192.168.1.0/24                  │
+│  VPN-Pool:  10.8.0.0/24                    │
 └──────────────┬─────────────────────────────┘
                │  OpenVPN UDP 1194
                │
-    ┌──────────▼─────────────────────────────────────┐
-    │  Raspberry Pi 5                                 │
-    │                                                 │
-    │  wlan0/eth0 → Uplink (Heimnetz oder Internet)  │
-    │  tun0        → VPN-Tunnel  10.8.0.10           │
-    │  eth1        → Gerätesub  172.16.100.1/24      │
-    │                                                 │
-    │  IP-Forwarding: aktiv                          │
-    │  nftables NAT:  eth1 → tun0 MASQUERADE        │
-    │  dnsmasq DHCP:  172.16.100.100–200             │
-    └──────────┬─────────────────────────────────────┘
-               │  Ethernet-Kabel (eth1 / USB-Adapter)
+    ┌──────────▼───────────────────────────────┐
+    │  Raspberry Pi 5                          │
+    │                                          │
+    │  eth0  → WAN (DHCP / Heimnetz)          │
+    │  tun0  → VPN-Tunnel 10.8.0.10           │
+    │  wlan0 → WiFi-Client (optional)         │
+    │  eth1  → Gerätesub 172.16.100.1 (opt.) │
+    └──────────┬───────────────────────────────┘
+               │  Ethernet (eth1 / USB-Adapter, optional)
+    ┌──────────▼───────────────────────┐
+    │  Gerät (IP per DHCP)             │
+    │  GW: 172.16.100.1               │
+    │  Heimnetz via VPN: ✓            │
+    └──────────────────────────────────┘
+```
+
+Dieses Profil ist der Standard nach dem RPi-Setup. Ethernet liefert die
+Internetverbindung / den VPN-Uplink, WiFi kann parallel als Client laufen
+oder für angebundene Geräte ein Ethernet-LAN (eth1) eingerichtet werden.
+
+#### Profil `wifi-ap` — Ethernet als WAN, WiFi als Hotspot
+
+```
+Internet / Heimnetz
+    │
+    ▼
+┌────────────────────────────────────────────┐
+│  pfSense + OpenVPN-Server                  │
+└──────────────┬─────────────────────────────┘
+               │  OpenVPN UDP 1194
                │
-    ┌──────────▼──────────────────────────┐
-    │  Angebundenes Gerät                  │
-    │  IP: 172.16.100.100 (per DHCP)      │
-    │  GW: 172.16.100.1  (RPi)            │
-    │                                      │
-    │  Erreichbar über VPN:               │
-    │    192.168.1.x Heimnetz  ✓          │
-    │    8.8.8.8     Internet   ✓          │
-    └──────────────────────────────────────┘
+    ┌──────────▼───────────────────────────────┐
+    │  Raspberry Pi 5                          │
+    │                                          │
+    │  eth0  → WAN (DHCP / Heimnetz)          │
+    │  tun0  → VPN-Tunnel 10.8.0.10           │
+    │  wlan0 → Access Point "Dashboard-AP"    │
+    │          IP: 192.168.50.1               │
+    │          DHCP: 192.168.50.100–200       │
+    │          NAT: → tun0 (VPN)             │
+    └──────────┬───────────────────────────────┘
+               │  WiFi (hostapd)
+    ┌──────────▼───────────────────────┐
+    │  WiFi-Gerät (IP per DHCP)        │
+    │  GW: 192.168.50.1               │
+    │  Heimnetz via VPN: ✓            │
+    │  Kein VPN am Gerät nötig        │
+    └──────────────────────────────────┘
+```
+
+Der RPi öffnet einen verschlüsselten WPA2-Hotspot. Verbundene Geräte bekommen
+automatisch eine IP und tunneln ihren Traffic transparent via VPN ins Heimnetz.
+Keinerlei VPN-Konfiguration auf dem Endgerät notwendig.
+
+#### Profil wechseln
+
+```bash
+# 1. panel.json anpassen (AP-SSID und Passwort setzen)
+nano frontend/public/panel.json
+
+# 2. Profil aktivieren
+sudo ./scripts/setup-network-profile.sh --profile wifi-ap
+
+# 3. Status prüfen
+sudo ./scripts/setup-network-profile.sh --status
+
+# Zurück zu eth-wan
+sudo ./scripts/setup-network-profile.sh --profile eth-wan
+```
+
+Profil-Konfiguration in `panel.json`:
+```json
+"network": {
+  "profile": "wifi-ap",
+  "wan_iface": "eth0",
+  "ap_iface": "wlan0",
+  "vpn_iface": "tun0",
+  "wifi_ap": {
+    "ssid": "MeinHotspot",
+    "password": "mindestens8zeichen",
+    "channel": 6,
+    "gateway": "192.168.50.1",
+    "dhcp_from": "192.168.50.100",
+    "dhcp_to": "192.168.50.200"
+  }
+}
 ```
 
 ---
 
-### WiFi konfigurieren
+### WiFi konfigurieren (Profil `eth-wan`)
 
 ```bash
 # Verfügbare Netzwerke anzeigen
@@ -225,7 +308,7 @@ sudo ./scripts/setup-wifi.sh --list
 # Mit WLAN verbinden (interaktiv)
 sudo ./scripts/setup-wifi.sh
 
-# Mit Parametern (für Scripting/CI)
+# Mit Parametern
 sudo ./scripts/setup-wifi.sh --ssid "Heimnetzwerk" --password "geheim"
 
 # Mit Priorität (höhere Zahl = bevorzugtes Netz)
@@ -236,11 +319,8 @@ Das Skript nutzt `nmcli` (NetworkManager, Standard auf RPi OS Bookworm).
 Verbindungen sind persistent und verbinden sich nach Neustart automatisch.
 
 ```bash
-# Gespeicherte Verbindungen
-nmcli connection show
-
-# Verbindungsstatus
-nmcli device status
+nmcli connection show    # Gespeicherte Verbindungen
+nmcli device status      # Verbindungsstatus
 ```
 
 ---
@@ -311,51 +391,27 @@ Pass  Any  VPN net → 172.16.100.0/24  # Heimnetz → Gerätesub
 
 ---
 
-### Ethernet-LAN für angebundene Geräte einrichten
+### Ethernet-LAN für angebundene Geräte (Profil `eth-wan`)
 
-Benötigt einen USB-Ethernet-Adapter (eth1) oder einen zweiten integrierten Port.
-Der RPi wird zum Router: angebundene Geräte erhalten DHCP und tunneln via VPN ins Heimnetz.
+Benötigt einen USB-Ethernet-Adapter (eth1).
+Ergänzt Profil `eth-wan` um ein kabelgebundenes LAN mit VPN-Routing.
 
 ```bash
-# Standardkonfiguration (eth1, Subnetz 172.16.100.0/24)
 sudo ./scripts/setup-lan-routing.sh
 
 # Mit eigenen Parametern
 sudo ./scripts/setup-lan-routing.sh \
   --lan-iface eth1 \
   --lan-gateway 172.16.100.1 \
-  --dhcp-range 172.16.100.100 172.16.100.200 \
-  --vpn-iface tun0
-```
-
-Das Skript richtet ein:
-- **Statische IP** auf eth1 via NetworkManager
-- **dnsmasq** — DHCP-Server für angebundene Geräte
-- **nftables** — NAT (MASQUERADE) für eth1 → tun0 und eth1 → eth0 (Fallback ohne VPN)
-- **OpenVPN-Hooks** — stellen Routing nach Tunnel-Aufbau sicher
-
-Angebundene Geräte benötigen keinerlei VPN-Konfiguration — der RPi übernimmt das
-vollständig transparent (NAT + Routing).
-
-#### Verbindungstest
-
-```bash
-# Auf dem RPi
-ip addr show eth1     # → 172.16.100.1 erwartet
-ip addr show tun0     # → 10.8.0.10 erwartet
-nft list ruleset      # NAT-Regeln prüfen
-
-# Vom angebundenen Gerät (172.16.100.x)
-ping 172.16.100.1     # RPi erreichbar
-ping 192.168.1.1      # Heimnetz-Gateway via VPN
+  --dhcp-range 172.16.100.100 172.16.100.200
 ```
 
 #### Hinweise
 
-- `config/vpn/*.ovpn`, `*.key`, `*.crt`, `credentials`-Dateien sind durch `.gitignore` geschützt
-- Ohne aktiven VPN-Tunnel fällt NAT auf den WAN-Uplink (eth0/wlan0) zurück
-- Touch-Wake und Display-Steuerung funktionieren auch bei kurzer VPN-Unterbrechung (MQTT reconnect)
-- Für bidirektionalen Zugriff (Heimnetz → angebundene Geräte) muss der CCD-Eintrag in pfSense korrekt gesetzt sein (`iroute`)
+- VPN-Credentials (`config/vpn/*.ovpn`, `*.creds`) sind durch `.gitignore` geschützt
+- Ohne aktiven VPN-Tunnel fällt NAT auf den WAN-Uplink zurück
+- MQTT-Reconnect hält die App auch bei kurzer VPN-Unterbrechung stabil
+- Für bidirektionalen Zugriff (Heimnetz → Gerätesub) muss `iroute` in pfSense gesetzt sein
 
 ## Entwicklungs-Workflow
 

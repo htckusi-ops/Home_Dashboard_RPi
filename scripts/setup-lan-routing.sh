@@ -55,11 +55,12 @@ log "Pakete installieren: dnsmasq nftables..."
 apt-get update -qq
 apt-get install -y -qq dnsmasq nftables
 
-# --- IP-Weiterleitung aktivieren ---
+# --- IP-Weiterleitung aktivieren (Drop-in, nicht sysctl.conf) ---
 log "IP-Forwarding aktivieren..."
-if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf; then
-    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-fi
+mkdir -p /etc/sysctl.d
+cat > /etc/sysctl.d/99-dashboard-routing.conf << 'EOF'
+net.ipv4.ip_forward=1
+EOF
 sysctl -w net.ipv4.ip_forward=1 >/dev/null
 
 # --- Statische IP für das LAN-Interface ---
@@ -67,7 +68,6 @@ log "Statische IP ${LAN_GATEWAY} auf ${LAN_IFACE} konfigurieren..."
 
 NM_CON_NAME="lan-routing-${LAN_IFACE}"
 
-# Bestehende NM-Verbindung für dieses Interface entfernen
 nmcli connection delete "$NM_CON_NAME" 2>/dev/null || true
 
 if command -v nmcli &>/dev/null; then
@@ -82,7 +82,6 @@ if command -v nmcli &>/dev/null; then
         connection.autoconnect yes || true
     nmcli connection up "$NM_CON_NAME" 2>/dev/null || true
 else
-    # Fallback: systemd-networkd
     cat > "/etc/systemd/network/10-${LAN_IFACE}.network" << EOF
 [Match]
 Name=${LAN_IFACE}
@@ -97,8 +96,7 @@ fi
 # --- dnsmasq für DHCP konfigurieren ---
 log "dnsmasq für DHCP auf ${LAN_IFACE} konfigurieren (${DHCP_FROM}–${DHCP_TO})..."
 
-DNSMASQ_CONF="/etc/dnsmasq.d/lan-routing.conf"
-cat > "$DNSMASQ_CONF" << EOF
+cat > /etc/dnsmasq.d/dashboard-lan.conf << EOF
 # Dashboard LAN-Routing — DHCP für angebundene Geräte
 interface=${LAN_IFACE}
 bind-interfaces
@@ -116,7 +114,7 @@ systemctl restart dnsmasq
 # --- nftables-Regeln erstellen ---
 log "nftables NAT-Regeln erstellen..."
 
-NFT_CONF="/etc/nftables.d/lan-routing.nft"
+NFT_CONF="/etc/nftables.d/dashboard-routing.nft"
 mkdir -p /etc/nftables.d
 
 cat > "$NFT_CONF" << EOF
@@ -143,13 +141,15 @@ table ip nat {
 }
 EOF
 
-# nftables Haupt-Konfiguration einbinden falls noch nicht vorhanden
-if ! grep -q "nftables.d" /etc/nftables.conf 2>/dev/null; then
-    echo 'include "/etc/nftables.d/*.nft"' >> /etc/nftables.conf
-fi
-
+# Regeln über systemd Drop-in laden — berührt /etc/nftables.conf nicht
+mkdir -p /etc/systemd/system/nftables.service.d
+cat > /etc/systemd/system/nftables.service.d/dashboard-routing.conf << EOF
+[Service]
+ExecStartPost=-/usr/sbin/nft -f ${NFT_CONF}
+EOF
+systemctl daemon-reload
 systemctl enable nftables
-nft -f "$NFT_CONF" 2>/dev/null || log "WARNUNG: nft konnte Regeln nicht sofort laden (Interface fehlt?). Werden beim Booten aktiv."
+nft -f "$NFT_CONF" 2>/dev/null || log "WARNUNG: nft-Regeln erst beim Booten aktiv (Interface fehlt?)."
 systemctl restart nftables || true
 
 # --- OpenVPN Up/Down-Hooks integrieren ---
@@ -160,8 +160,6 @@ mkdir -p "$OPENVPN_HOOKS_DIR"
 
 cat > "${OPENVPN_HOOKS_DIR}/lan-routing-up.sh" << HOOK
 #!/bin/bash
-# Wird von OpenVPN beim Tunnel-Aufbau aufgerufen.
-# Stellt sicher dass nftables-Regeln aktiv sind.
 nft -f ${NFT_CONF} 2>/dev/null || true
 logger -t openvpn-lan "LAN-Routing aktiv: ${LAN_SUBNET} → \${dev}"
 HOOK
@@ -169,13 +167,10 @@ chmod +x "${OPENVPN_HOOKS_DIR}/lan-routing-up.sh"
 
 cat > "${OPENVPN_HOOKS_DIR}/lan-routing-down.sh" << HOOK
 #!/bin/bash
-# Beim Tunnel-Abbau bleibt NAT über WAN-Interface aktiv
-# (angebundene Geräte verlieren nur den VPN-Zugang, nicht die Internetverbindung)
 logger -t openvpn-lan "VPN-Tunnel abgebaut. LAN fällt auf WAN-NAT zurück."
 HOOK
 chmod +x "${OPENVPN_HOOKS_DIR}/lan-routing-down.sh"
 
-# In bestehendes OpenVPN-Profil eintragen (falls vorhanden)
 OVPN_CONF="/etc/openvpn/client/dashboard.conf"
 if [[ -f "$OVPN_CONF" ]]; then
     if ! grep -q "lan-routing-up" "$OVPN_CONF"; then
@@ -191,7 +186,6 @@ EOF
     fi
 fi
 
-# --- Status ausgeben ---
 log ""
 log "LAN-Routing-Setup abgeschlossen!"
 log ""
@@ -199,15 +193,15 @@ log "Netzwerk-Topologie:"
 log "  Angebundene Geräte → ${LAN_IFACE} [${LAN_GATEWAY}] → tun0/VPN → Heimnetz"
 log "  DHCP-Bereich: ${DHCP_FROM} – ${DHCP_TO}"
 log ""
-log "pfSense muss folgendes konfiguriert haben (siehe CLAUDE.md):"
+log "pfSense muss folgendes konfiguriert haben (siehe config/network/pfsense-openvpn-server.md):"
 log "  - OpenVPN Server: topology subnet"
 log "  - CCD für diesen Client: iroute ${LAN_SUBNET/\/24/ 255.255.255.0}"
 log "  - Server-seitig: route ${LAN_SUBNET/\/24/ 255.255.255.0}"
 log "  - Firewall: VPN-Interface → LAN für ${LAN_SUBNET}"
 log ""
 log "Test auf angebundenem Gerät:"
-log "  ping ${LAN_GATEWAY}          # Erreichbarkeit RPi"
-log "  ping HEIMNETZ-GERÄT-IP       # Erreichbarkeit Heimnetz via VPN"
+log "  ping ${LAN_GATEWAY}       # RPi erreichbar"
+log "  ping HEIMNETZ-GERÄT-IP    # Heimnetz via VPN"
 log ""
 log "Nützliche Befehle:"
 log "  DHCP-Leases:   cat /var/lib/misc/dnsmasq.leases"
