@@ -1,0 +1,57 @@
+{
+  "mqtt": {
+    "broker_host": "localhost",
+    "broker_port": 1883,
+    "websocket_port": 9001
+  },
+  "panels": {
+    "kitchen": {
+      "panel_id": "kitchen",
+      "panel_name": "Küche",
+      "location": "kitchen"
+    }
+  },
+  "home_assistant": {
+    "url": "http://homeassistant.local:8123",
+    "token": "REPLACE_WITH_HA_LONG_LIVED_TOKEN"
+  },
+  "zigbee2mqtt": {
+    "base_topic": "zigbee2mqtt",
+    "motion_sensors": {
+      "kitchen_motion": {
+        "friendly_name": "Küche Bewegungsmelder",
+        "panel_id": "kitchen"
+      }
+    }
+  },
+  "sonos": {
+    "room": "Küche",
+    "coordinator_ip": "192.168.1.100"
+  },
+  "scenes": {
+    "yoga": {
+      "id": "yoga",
+      "name": "Yoga",
+      "ha_scene_id": "scene.yoga",
+      "sonos_playlist": null
+    },
+    "kinderparty": {
+      "id": "kinderparty",
+      "name": "Kinderparty",
+      "ha_scene_id": "scene.kinderparty",
+      "sonos_playlist": "kids_songs"
+    },
+    "abendessen": {
+      "id": "abendessen",
+      "name": "Abendessen",
+      "ha_scene_id": "scene.abendessen",
+      "sonos_playlist": null
+    },
+    "nachtmodus": {
+      "id": "nachtmodus",
+      "name": "Nachtmodus",
+      "ha_scene_id": "scene.nachtmodus",
+      "sonos_playlist": null
+    }
+  }
+}
