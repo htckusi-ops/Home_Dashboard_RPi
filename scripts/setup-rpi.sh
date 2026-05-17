@@ -1,57 +1,49 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Einmalig auszuführendes Setup-Skript für den Raspberry Pi 5 als Kiosk-Display.
+# MQTT-Broker und Node-RED laufen auf der zentralen Infrastruktur, nicht hier.
+# Dieses Skript richtet nur das Display-Panel ein.
+
 DASHBOARD_DIR="/home/user/Home_Dashboard_RPi"
-FRONTEND_PORT=5173
+KIOSK_USER="${SUDO_USER:-pi}"
+FRONTEND_PORT=4173
 
-log() { echo "[setup] $*"; }
+log() { echo "[setup-rpi] $*"; }
 
-log "Smart Home Dashboard - Raspberry Pi 5 Setup"
-log "============================================"
+log "Smart Home Dashboard — Raspberry Pi 5 Panel Setup"
+log "=================================================="
 
 if [[ "$(id -u)" -ne 0 ]]; then
-    log "ERROR: Run as root or with sudo"
+    log "ERROR: Als root oder mit sudo ausführen"
     exit 1
 fi
 
-log "Updating system packages..."
+log "Systempakete aktualisieren..."
 apt-get update -qq
 apt-get upgrade -y -qq
 
-log "Installing required packages..."
+log "Notwendige Pakete installieren..."
 apt-get install -y -qq \
     chromium-browser \
     xdotool \
     unclutter \
     curl \
     git \
-    jq
+    jq \
+    nginx
 
-log "Installing Node.js 20.x..."
+log "Node.js 20.x installieren..."
 if ! command -v node &>/dev/null || [[ "$(node --version | cut -d. -f1 | tr -d v)" -lt 18 ]]; then
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt-get install -y -qq nodejs
 fi
-log "Node.js version: $(node --version)"
-log "npm version: $(npm --version)"
+log "Node.js: $(node --version), npm: $(npm --version)"
 
-log "Installing Docker..."
-if ! command -v docker &>/dev/null; then
-    curl -fsSL https://get.docker.com | sh
-    usermod -aG docker "${SUDO_USER:-pi}"
-    systemctl enable docker
-    systemctl start docker
-fi
-log "Docker version: $(docker --version)"
-
-if ! command -v docker compose &>/dev/null; then
-    log "Installing Docker Compose plugin..."
-    apt-get install -y -qq docker-compose-plugin
-fi
-
-log "Disabling screen blanking and power management..."
+log "Bildschirm-Blanking und Energieverwaltung deaktivieren..."
 raspi-config nonint do_blanking 1 2>/dev/null || true
 
+mkdir -p /etc/X11/xorg.conf.d
 cat > /etc/X11/xorg.conf.d/10-no-blanking.conf << 'EOF'
 Section "ServerFlags"
     Option "BlankTime" "0"
@@ -64,12 +56,33 @@ EOF
 if [[ -f /boot/firmware/cmdline.txt ]]; then
     if ! grep -q "consoleblank=0" /boot/firmware/cmdline.txt; then
         sed -i 's/$/ consoleblank=0/' /boot/firmware/cmdline.txt
-        log "Added consoleblank=0 to kernel cmdline"
+        log "consoleblank=0 zu Kernel-Cmdline hinzugefügt"
     fi
 fi
 
-log "Configuring autostart for kiosk mode..."
-AUTOSTART_DIR="/home/${SUDO_USER:-pi}/.config/autostart"
+log "Frontend-Abhängigkeiten installieren und bauen..."
+cd "${DASHBOARD_DIR}/frontend"
+npm install --silent
+npm run build
+log "Frontend gebaut in ${DASHBOARD_DIR}/frontend/dist"
+
+log "Nginx konfigurieren (statisches Frontend ausliefern)..."
+cat > /etc/nginx/sites-available/dashboard << EOF
+server {
+    listen ${FRONTEND_PORT};
+    root ${DASHBOARD_DIR}/frontend/dist;
+    index index.html;
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+}
+EOF
+ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/dashboard
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl enable nginx && systemctl restart nginx
+
+log "Autostart für Kiosk-Modus konfigurieren..."
+AUTOSTART_DIR="/home/${KIOSK_USER}/.config/autostart"
 mkdir -p "$AUTOSTART_DIR"
 
 cat > "$AUTOSTART_DIR/dashboard-kiosk.desktop" << EOF
@@ -79,35 +92,19 @@ Name=Smart Home Dashboard
 Exec=${DASHBOARD_DIR}/scripts/start-kiosk.sh
 X-GNOME-Autostart-enabled=true
 EOF
-chown -R "${SUDO_USER:-pi}:${SUDO_USER:-pi}" "$AUTOSTART_DIR"
-
-log "Installing frontend dependencies..."
-cd "${DASHBOARD_DIR}/frontend"
-npm install --silent
-
-log "Building frontend..."
-npm run build
-
-log "Creating .env file for docker..."
-if [[ ! -f "${DASHBOARD_DIR}/docker/.env" ]]; then
-    cat > "${DASHBOARD_DIR}/docker/.env" << 'ENVEOF'
-NR_KITCHEN_PIN=1234
-NR_ADMIN_PASSWORD=
-NR_CREDENTIAL_SECRET=change-me-in-production
-HA_URL=http://homeassistant.local:8123
-HA_TOKEN=
-SONOS_ROOM=Küche
-SONOS_API_URL=http://localhost:5005
-ENVEOF
-    log "Created docker/.env - EDIT THIS FILE with your secrets before starting!"
-fi
+chown -R "${KIOSK_USER}:${KIOSK_USER}" "$AUTOSTART_DIR"
 
 log ""
-log "Setup complete!"
+log "Setup abgeschlossen!"
 log ""
-log "Next steps:"
-log "  1. Edit ${DASHBOARD_DIR}/docker/.env with your secrets"
-log "  2. Start services: cd ${DASHBOARD_DIR}/docker && docker compose up -d"
-log "  3. Import flows: copy node-red/flows/flows.json to Node-RED via the editor"
-log "  4. Reboot to start kiosk: sudo reboot"
+log "Nächste Schritte:"
+log "  1. frontend/public/panel.json anpassen:"
+log "     - mqtt.broker auf den zentralen MQTT-Broker zeigen lassen"
+log "       z.B. ws://homeserver.local:9001"
+log "     - panel_id, Kameras, Szenen, etc. konfigurieren"
+log "  2. npm run build im frontend/ ausführen"
+log "  3. Neu starten: sudo reboot"
+log ""
+log "Node-RED Flows auf dem Zentralserver importieren:"
+log "  node-red/flows/flows.json in Node-RED UI importieren und deployen"
 log ""

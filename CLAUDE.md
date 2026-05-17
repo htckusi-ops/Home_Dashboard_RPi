@@ -1,121 +1,139 @@
 # Smart Home Dashboard — Raspberry Pi 5 Kiosk
 
-## Project Overview
+## Projektübersicht
 
-A modular, MQTT-based Smart Home Kiosk dashboard for Raspberry Pi 5.
-The display runs in Chromium kiosk mode and shows a React frontend.
-All business logic lives in Node-RED. The frontend is a pure display client.
+Modulares, MQTT-basiertes Smart-Home-Kiosk-Dashboard für Raspberry Pi 5.
+Das Display läuft im Chromium-Kiosk-Modus und zeigt eine React-Frontend-App.
+Die gesamte Geschäftslogik liegt in Node-RED auf der zentralen Infrastruktur.
+Das Frontend ist ein reiner Display-Client ohne eigene Logik.
 
-## Architecture
-
-```
-Chromium Kiosk (frontend React app)
-        ↕ WebSocket MQTT (ws://broker:9001)
-Mosquitto MQTT broker (central message bus)
-        ↕ TCP MQTT (mqtt://broker:1883)
-Node-RED (logic engine: scenes, schedules, PIN validation, MQTT routing)
-        ↕ HTTP API
-Home Assistant  |  Sonos HTTP API  |  Zigbee2MQTT
-```
-
-**Critical rule**: The frontend only publishes intent and subscribes to state.
-It never makes decisions. Every user action → MQTT publish → Node-RED → MQTT back → state update.
-
-## Repository Structure
+## Architektur
 
 ```
-frontend/           React + Vite dashboard app
+┌─────────────────────────────────┐   ┌──────────────────────────────────────────┐
+│  Raspberry Pi (Panel / Kiosk)   │   │  Zentralserver (separate Infrastruktur)  │
+│                                 │   │                                          │
+│  Chromium Kiosk                 │   │  Mosquitto MQTT Broker                   │
+│  └─ React Frontend              │◄──┤  └─ TCP Port 1883                        │
+│     (pure Display Client)       │   │  └─ WebSocket Port 9001                  │
+│                                 │   │                                          │
+│  Nginx (statisches Serving)     │   │  Node-RED (Logik-Engine)                 │
+│                                 │   │  └─ Szenen, Zeitpläne, PIN-Validierung   │
+└─────────────────────────────────┘   │  └─ MQTT-Routing, Display-Steuerung     │
+                                      │                                          │
+                                      │  Home Assistant  │  Zigbee2MQTT          │
+                                      │  Grafana         │  Sonos HTTP API       │
+                                      │  ZoneMinder                              │
+                                      └──────────────────────────────────────────┘
+```
+
+**Wichtigste Regel**: Das Frontend published nur Intent und subscribed auf State.
+Es trifft keine Entscheidungen. Jede Benutzeraktion → MQTT publish → Node-RED → MQTT zurück → State-Update.
+
+## Repository-Struktur
+
+```
+frontend/                   React + Vite Dashboard-App (läuft auf dem RPi)
   src/
-    components/     UI components (MainLayout, QuickEdgeMenu, PinPad, etc.)
-    views/          Page views routed by current_view state
-    store/          Zustand state management (usePanelStore)
-    mqtt/           MQTT.js WebSocket client + topic handlers
-    config/         Config loader (fetches /panel.json)
+    components/             UI-Komponenten
+      MainLayout/           App-Shell mit Header, Uhr, Modus-Indikator
+      QuickEdgeMenu/        Randmenü: Blanking-Unterdrückung, Wake-on-Motion
+      PinPad/               4-stellige PIN-Eingabe für Erwachsenenmodus
+      OnScreenKeyboard/     QWERTZ-Tastatur (deutsches Layout), immer verfügbar
+      CameraOverrideView/   Vollbild-Kameraansicht mit Countdown
+      SceneButtons/         Konfigurierbares Szenen-Grid
+      SonosKidsMenu/        Playlist-Buttons + Lautstärke (Kids-Cap)
+      EmbeddedAppFrame/     Sandboxed iframe für Grafana, HA, ZoneMinder
+    views/                  Seitenansichten (per current_view-State geroutet)
+    store/                  Zustand State Management (usePanelStore)
+    mqtt/                   MQTT.js WebSocket-Client + Topic-Handler
+    config/                 Config-Loader (liest /panel.json)
   public/
-    panel.json      Per-panel runtime config (edit this for your setup)
+    panel.json              Panel-Laufzeitkonfiguration (ANPASSEN vor Deployment)
 
 node-red/
   flows/
-    flows.json      Node-RED flow skeleton with all MQTT topic handlers
+    flows.json              Node-RED Flow-Skeleton — auf Zentralserver importieren
+
+infrastructure/             Docker Compose für den Zentralserver (NICHT auf dem RPi)
+  docker-compose.yml        Mosquitto + Node-RED + Grafana
+  mosquitto/
+    mosquitto.conf          MQTT Ports 1883 (TCP) + 9001 (WebSocket)
+  node-red/
+    settings.js             Node-RED Einstellungen (Secrets via ENV)
+  .env.example              Vorlage für Secrets (cp .env.example .env)
 
 config/
-  panel.json        Per-panel config (copy to frontend/public/panel.json)
-  global.json       Global config (used by Node-RED)
-
-docker/
-  docker-compose.yml    Mosquitto + Node-RED + Grafana
-  mosquitto/
-    mosquitto.conf  Mosquitto config (MQTT port 1883, WS port 9001)
-  node-red/
-    settings.js     Node-RED settings
+  panel.json                Panel-Konfigurationsvorlage
+  global.json               Globale Konfiguration (für Node-RED)
 
 scripts/
-  setup-rpi.sh      One-shot RPi5 setup (installs deps, configures kiosk)
-  start-kiosk.sh    Starts Chromium in kiosk mode
+  setup-rpi.sh              Einmaliges RPi5-Setup (nur Panel-Client!)
+  start-kiosk.sh            Startet Chromium im Kiosk-Modus
 ```
 
-## MQTT Topic Reference
+## MQTT Topic-Referenz
 
-All panel topics are prefixed with `dashboard/panels/<panel_id>/`.
+Alle Panel-Topics haben das Präfix `dashboard/panels/<panel_id>/`.
 
-### Display Control
-| Topic | Direction | Payload | Description |
-|-------|-----------|---------|-------------|
-| `display/set` | Frontend → NR | `on\|off\|dimmed` | Request display state change |
-| `display/state` | NR → Frontend | `on\|off\|dimmed` | Confirmed display state |
-| `display/override/set` | Frontend → NR | `{ active, until }` | Set display override |
-| `display/override/state` | NR → Frontend | `{ active, until }` | Override state |
-| `display/override/cancel` | Frontend → NR | `{}` | Cancel override |
+### Display-Steuerung
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|--------------|
+| `display/set` | Frontend → NR | `on\|off\|dimmed` | Display-Zustand anfordern |
+| `display/state` | NR → Frontend | `on\|off\|dimmed` | Bestätigter Display-Zustand |
+| `display/override/set` | Frontend → NR | `{ active, until }` | Blanking-Unterdrückung setzen |
+| `display/override/state` | NR → Frontend | `{ active, until }` | Aktueller Override-Zustand |
+| `display/override/cancel` | Frontend → NR | `{}` | Override aufheben |
 
-### View Routing
-| Topic | Direction | Payload | Description |
-|-------|-----------|---------|-------------|
-| `view/set` | Frontend → NR | `main_menu\|music\|climate\|cameras\|grafana\|homeassistant\|morning` | Navigate to view |
-| `view/state` | NR → Frontend | view name | Confirmed current view |
+### View-Routing
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|--------------|
+| `view/set` | Frontend → NR | `main_menu\|music\|climate\|cameras\|grafana\|homeassistant\|morning` | View anfordern |
+| `view/state` | NR → Frontend | View-Name | Bestätigter aktueller View |
 
-### Authentication
-| Topic | Direction | Payload | Description |
-|-------|-----------|---------|-------------|
-| `pin/validate` | Frontend → NR | `{ pin: "1234" }` | Validate PIN |
-| `pin/result` | NR → Frontend | `{ success, mode, expires_at? }` | PIN result |
-| `mode/state` | NR → Frontend | `{ mode: "kids"\|"adult" }` | Mode change |
+### Authentifizierung
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|--------------|
+| `pin/validate` | Frontend → NR | `{ pin: "1234" }` | PIN validieren |
+| `pin/result` | NR → Frontend | `{ success, mode, expires_at? }` | PIN-Ergebnis |
+| `mode/state` | NR → Frontend | `{ mode: "kids"\|"adult" }` | Moduswechsel |
 
-### Blanking Suppression
-| Topic | Direction | Payload | Description |
-|-------|-----------|---------|-------------|
-| `blanking/inhibit/set` | Frontend → NR | `{ action: "extend"\|"reduce"\|"cancel", seconds }` | Adjust suppression |
-| `blanking/inhibit/state` | NR → Frontend | `{ active, until }` | Current suppression state |
+### Blanking-Unterdrückung
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|--------------|
+| `blanking/inhibit/set` | Frontend → NR | `{ action: "extend"\|"reduce"\|"cancel", seconds }` | Unterdrückung anpassen |
+| `blanking/inhibit/state` | NR → Frontend | `{ active, until }` | Aktueller Unterdrückungszustand |
 
-### Motion / Wake
-| Topic | Direction | Payload | Description |
-|-------|-----------|---------|-------------|
-| `wake_on_motion/set` | Frontend → NR | `"true"\|"false"` | Enable/disable motion wake |
-| `wake_on_motion/state` | NR → Frontend | `"on"\|"off"` | Current motion wake state |
+### Bewegung / Wake
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|--------------|
+| `wake_on_motion/set` | Frontend → NR | `"true"\|"false"` | Motion-Wake aktivieren/deaktivieren |
+| `wake_on_motion/state` | NR → Frontend | `"on"\|"off"` | Aktueller Motion-Wake-Zustand |
 
-### Quick Menu
-| Topic | Direction | Payload | Description |
-|-------|-----------|---------|-------------|
-| `quickmenu/open` | Frontend → NR | `{}` | Signal quick menu open |
-| `quickmenu/state` | NR → Frontend | `{ open: bool }` | Quick menu state |
+### Quick-Menü
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|--------------|
+| `quickmenu/open` | Frontend → NR | `{}` | Quick-Menü-Öffnung signalisieren |
+| `quickmenu/state` | NR → Frontend | `{ open: bool }` | Quick-Menü-Zustand |
 
 ### Overrides
-| Topic | Direction | Payload | Description |
-|-------|-----------|---------|-------------|
-| `override/camera/set` | Frontend → NR | `{ camera_id, camera_url, camera_name, duration_seconds }` | Show camera fullscreen |
-| `override/state` | NR → Frontend | `{ type, camera_id, camera_url, camera_name, expires_at }\|null` | Active override |
-| `override/restore` | Frontend → NR | `{ reason }` | Cancel override |
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|--------------|
+| `override/camera/set` | Frontend → NR | `{ camera_id, camera_url, camera_name, duration_seconds }` | Kamera-Vollbild zeigen |
+| `override/state` | NR → Frontend | `{ type, camera_id, camera_url, camera_name, expires_at }\|null` | Aktiver Override |
+| `override/restore` | Frontend → NR | `{ reason }` | Override aufheben |
 
-### Keyboard
-| Topic | Direction | Payload | Description |
-|-------|-----------|---------|-------------|
-| `keyboard/show` | NR → Frontend | `{}` | Show on-screen keyboard |
+### Tastatur
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|--------------|
+| `keyboard/show` | NR → Frontend | `{}` | Bildschirmtastatur anzeigen |
 
-### Global Topics
-| Topic | Description |
-|-------|-------------|
-| `dashboard/scenes/trigger` | `{ scene_id }` — triggers a scene |
+### Globale Topics
+| Topic | Beschreibung |
+|-------|--------------|
+| `dashboard/scenes/trigger` | `{ scene_id }` — Szene auslösen |
 | `dashboard/sonos/command` | `{ action, playlist_id?, volume?, delta? }` |
-| `dashboard/settings/global` | Global settings broadcast |
+| `dashboard/settings/global` | Globale Einstellungen broadcasten |
 
 ## Panel State Shape
 
@@ -137,91 +155,120 @@ All panel topics are prefixed with `dashboard/panels/<panel_id>/`.
 }
 ```
 
-## Development Workflow
+## Entwicklungs-Workflow
 
-### Local Development (without RPi)
+### Lokal entwickeln (ohne RPi, ohne zentralen Server)
 
 ```bash
-# Start MQTT broker (Docker required)
-cd docker && docker compose up mosquitto -d
+# MQTT-Broker lokal starten (für Entwicklung)
+cd infrastructure && docker compose up mosquitto -d
 
-# Start frontend dev server
-cd frontend && npm run dev
+# Frontend Dev-Server starten
+cd frontend && npm install && npm run dev
 # → http://localhost:5173
 
-# Start Node-RED
-cd docker && docker compose up node-red -d
+# Node-RED lokal starten (optional für Flow-Entwicklung)
+cd infrastructure && docker compose up node-red -d
 # → http://localhost:1880/red
 ```
 
-### Deploy to RPi
+### Auf dem Zentralserver deployen
 
 ```bash
-# One-time setup
-sudo ./scripts/setup-rpi.sh
+# .env aus Vorlage erstellen und anpassen
+cd infrastructure && cp .env.example .env && nano .env
 
-# Start services
-cd docker && docker compose up -d
+# Services starten (Mosquitto + Node-RED + Grafana)
+docker compose up -d
 
-# Kiosk starts automatically on login via autostart desktop entry
-# Or manually:
-./scripts/start-kiosk.sh
+# Node-RED Flows importieren
+# → Node-RED UI öffnen → Menu → Import → node-red/flows/flows.json → Deploy
 ```
 
-### Import Node-RED Flows
+### Auf dem RPi deployen
 
-1. Open Node-RED at `http://localhost:1880/red`
-2. Menu → Import → select `node-red/flows/flows.json`
-3. Deploy
+```bash
+# Repository auf dem RPi klonen
+git clone <repo-url> /home/pi/Home_Dashboard_RPi
+cd /home/pi/Home_Dashboard_RPi
 
-## How to Add a New View
+# panel.json anpassen (MQTT-Broker-URL + Panel-ID)
+nano frontend/public/panel.json
 
-1. Create `frontend/src/views/MyNewView.jsx`
-2. Add the case to the `ViewRouter` switch in `frontend/src/App.jsx`
-3. Add a navigation button in `MainMenuView.jsx` (with `publishPanel('view/set', 'my_new_view')`)
-4. Add the view name to the valid views list in the Node-RED `fn_view_set` function node
-5. Deploy Node-RED flows
+# Einmaliges Setup (installiert Chromium, Nginx, Node.js, baut Frontend)
+sudo ./scripts/setup-rpi.sh
 
-## How to Add a New Scene
+# Neustarten — Kiosk startet automatisch
+sudo reboot
+```
 
-1. Add the scene to `frontend/public/panel.json` → `scenes` array
-2. Add the scene to `config/global.json` → `scenes` object
-3. Add the scene config to the `SCENE_CONFIG` object in the Node-RED `fn_scene_router` function node
-4. Create the corresponding scene in Home Assistant
+### panel.json auf dem RPi konfigurieren
 
-## How to Add a New Panel (second display)
+Die wichtigsten Felder in `frontend/public/panel.json`:
+```json
+{
+  "panel_id": "kitchen",
+  "mqtt": {
+    "broker": "ws://ZENTRALSERVER_IP:9001",
+    "clientId": "dashboard_kitchen"
+  }
+}
+```
 
-1. Copy `config/panel.json` → `config/panel_<room>.json`, set `panel_id` to the new room name
-2. Copy `frontend/public/panel.json`, update `panel_id` and `mqtt.clientId`
-3. In Node-RED, duplicate the "Panel: Kitchen" tab, update all topic references from `kitchen` to the new panel_id
-4. Adjust `SENSOR_MAP` in the motion tab to route the room's motion sensor to the new panel_id
+### Node-RED Flows auf Zentralserver importieren
 
-## Component Reference
+1. Node-RED UI öffnen: `http://zentralserver:1880/red`
+2. Hamburger-Menü → Import → Datei wählen: `node-red/flows/flows.json`
+3. Deploy klicken
 
-| Component | Description |
-|-----------|-------------|
-| `MainLayout` | App shell: header with clock, mode indicator, MQTT status, hamburger menu trigger |
-| `QuickEdgeMenu` | Slide-in panel from left: blanking suppression, wake-on-motion toggle, display off |
-| `PinPad` | 4-digit PIN entry dialog for adult mode unlock |
-| `OnScreenKeyboard` | Full QWERTZ keyboard overlay (German layout), always accessible |
-| `CameraOverrideView` | Fullscreen camera iframe with countdown timer |
-| `SceneButtons` | Configurable grid of scene trigger buttons |
-| `SonosKidsMenu` | Playlist selector + volume control (volume capped in kids mode) |
-| `EmbeddedAppFrame` | Sandboxed iframe wrapper for Grafana, HA, ZoneMinder |
+## Neuen View hinzufügen
 
-## Security Notes
+1. `frontend/src/views/MeinNeuerView.jsx` erstellen
+2. Case in `ViewRouter`-Switch in `frontend/src/App.jsx` eintragen
+3. Navigations-Button in `MainMenuView.jsx` hinzufügen (`publishPanel('view/set', 'mein_neuer_view')`)
+4. View-Namen in die gültige Views-Liste des Node-RED `fn_view_set` Function-Nodes eintragen
+5. Node-RED Flows deployen
 
-- PIN is validated in Node-RED, never checked client-side
-- Adult-only views (`grafana`, `homeassistant`) are blocked by Node-RED, not just hidden
-- Use environment variables for secrets: `NR_KITCHEN_PIN`, `HA_TOKEN`, `NR_CREDENTIAL_SECRET`
-- Edit `docker/.env` (not committed) with real values
-- Mosquitto is configured with `allow_anonymous true` — add password auth for production
+## Neue Szene hinzufügen
+
+1. Szene in `frontend/public/panel.json` → `scenes`-Array eintragen
+2. Szene in `config/global.json` → `scenes`-Objekt eintragen
+3. Szenen-Konfiguration im Node-RED `fn_scene_router` Function-Node ergänzen
+4. Entsprechende Szene in Home Assistant anlegen
+
+## Neues Panel hinzufügen (zweites Display)
+
+1. `config/panel.json` → `config/panel_<raum>.json` kopieren, `panel_id` setzen
+2. Auf dem neuen RPi: `frontend/public/panel.json` anpassen (`panel_id`, `mqtt.clientId`)
+3. In Node-RED: "Panel: Kitchen"-Tab duplizieren, alle Topic-Referenzen von `kitchen` auf neue panel_id anpassen
+4. `SENSOR_MAP` im Motion-Tab anpassen (Bewegungsmelder → neue panel_id)
+
+## Komponenten-Referenz
+
+| Komponente | Beschreibung |
+|------------|--------------|
+| `MainLayout` | App-Shell: Header mit Uhr, Modus-Indikator, MQTT-Status, Menü-Trigger |
+| `QuickEdgeMenu` | Einschiebbares Randmenü: Blanking-Unterdrückung, Wake-on-Motion, Display aus |
+| `PinPad` | 4-stellige PIN-Eingabe für Erwachsenenmodus-Freischaltung |
+| `OnScreenKeyboard` | QWERTZ-Tastatur-Overlay (deutsches Layout), immer per Button erreichbar |
+| `CameraOverrideView` | Vollbild-Kamera-iframe mit Countdown-Timer |
+| `SceneButtons` | Konfigurierbares Grid von Szenen-Trigger-Buttons |
+| `SonosKidsMenu` | Playlist-Auswahl + Lautstärke-Kontrolle (Kids-Modus-Cap) |
+| `EmbeddedAppFrame` | Sandboxed iframe-Wrapper für Grafana, HA, ZoneMinder |
+
+## Sicherheitshinweise
+
+- PIN wird in Node-RED validiert, nie client-seitig geprüft
+- Erwachsenen-only-Views (`grafana`, `homeassistant`) werden von Node-RED blockiert, nicht nur ausgeblendet
+- Secrets via Umgebungsvariablen: `NR_KITCHEN_PIN`, `HA_TOKEN`, `NR_CREDENTIAL_SECRET`
+- `infrastructure/.env` bearbeiten (wird nicht eingecheckt — nur `.env.example` ist im Repo)
+- Mosquitto läuft mit `allow_anonymous true` — für Produktion Passwort-Auth ergänzen
 
 ## Style Guide
 
-- Dark theme: `bg-gray-900`, `bg-gray-800`, `text-white`
-- Touch targets: minimum 60px height (`min-h-[60px]`)
-- UI language: German
-- No code comments unless explaining non-obvious behavior
-- Components are small and focused, no shared state except Zustand store
-- All user actions go through MQTT; never update store state directly from UI
+- Dunkles Theme: `bg-gray-900`, `bg-gray-800`, `text-white`
+- Touch-Targets: mindestens 60px Höhe (`min-h-[60px]`)
+- UI-Sprache: Deutsch
+- Keine Code-Kommentare außer bei nicht-offensichtlichem Verhalten
+- Komponenten klein und fokussiert, kein geteilter State außer Zustand-Store
+- Alle Benutzeraktionen gehen über MQTT; Store-State nie direkt aus der UI setzen
