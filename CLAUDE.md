@@ -66,10 +66,18 @@ infrastructure/             Docker Compose für den Zentralserver (NICHT auf dem
 config/
   panel.json                Panel-Konfigurationsvorlage
   global.json               Globale Konfiguration (für Node-RED)
+  vpn/
+    .gitignore              Schützt alle VPN-Credentials vor git
+    dashboard.ovpn.example  Beispielstruktur pfSense-Export
+  network/
+    pfsense-openvpn-server.md  pfSense-Server-Konfigurationsanleitung
 
 scripts/
   setup-rpi.sh              Einmaliges RPi5-Setup (nur Panel-Client!)
   start-kiosk.sh            Startet Chromium im Kiosk-Modus
+  setup-wifi.sh             WiFi-Verbindung per NetworkManager einrichten
+  setup-vpn.sh              OpenVPN-Client (pfSense-Profil) einrichten
+  setup-lan-routing.sh      Ethernet-LAN für angebundene Geräte + VPN-Routing
 ```
 
 ## MQTT Topic-Referenz
@@ -155,68 +163,199 @@ Alle Panel-Topics haben das Präfix `dashboard/panels/<panel_id>/`.
 }
 ```
 
-## VPN — Externer Zugriff via pfSense OpenVPN
+## Netzwerk — WiFi, Ethernet und VPN
 
-Das Panel kann außerhalb des Heimnetzes über einen OpenVPN-Tunnel genutzt werden.
-Der Tunnel ist für die App vollständig transparent — `panel.json` bleibt unverändert,
-da das VPN dem RPi dieselbe Netzwerksicht wie im Heimnetz gibt.
+Der RPi unterstützt drei Netzwerkszenarien, die sich kombinieren lassen:
 
-### Voraussetzungen
+| Szenario | Uplink | Angebundene Geräte | VPN |
+|----------|--------|-------------------|-----|
+| Lokalbetrieb | eth0 oder wlan0 | — | optional |
+| Fernzugriff | wlan0/eth0 | — | ✓ → Heimnetz erreichbar |
+| Router-Modus | wlan0/eth0 | eth1 (USB-Adapter) | ✓ → Geräte im Heimnetz |
 
-- pfSense mit konfiguriertem OpenVPN-Server (Remote Access / User Auth)
-- VPN-Benutzer in pfSense angelegt (`System → User Manager`)
-- Öffentliche IP oder DynDNS für den pfSense-Router
+### Netzwerk-Topologie (Router-Modus mit VPN)
 
-### Profil von pfSense exportieren
+```
+Internet
+    │
+    ▼
+┌────────────────────────────────────────────┐
+│  pfSense                                    │
+│  OpenVPN-Server  10.8.0.0/24               │
+│  Heimnetz-LAN    192.168.1.0/24            │
+│                                             │
+│  Routing:                                   │
+│    10.8.0.10/32   → tun-RPi (feste VPN-IP) │
+│    172.16.100.0/24 → tun-RPi (Gerätesub)  │
+└──────────────┬─────────────────────────────┘
+               │  OpenVPN UDP 1194
+               │
+    ┌──────────▼─────────────────────────────────────┐
+    │  Raspberry Pi 5                                 │
+    │                                                 │
+    │  wlan0/eth0 → Uplink (Heimnetz oder Internet)  │
+    │  tun0        → VPN-Tunnel  10.8.0.10           │
+    │  eth1        → Gerätesub  172.16.100.1/24      │
+    │                                                 │
+    │  IP-Forwarding: aktiv                          │
+    │  nftables NAT:  eth1 → tun0 MASQUERADE        │
+    │  dnsmasq DHCP:  172.16.100.100–200             │
+    └──────────┬─────────────────────────────────────┘
+               │  Ethernet-Kabel (eth1 / USB-Adapter)
+               │
+    ┌──────────▼──────────────────────────┐
+    │  Angebundenes Gerät                  │
+    │  IP: 172.16.100.100 (per DHCP)      │
+    │  GW: 172.16.100.1  (RPi)            │
+    │                                      │
+    │  Erreichbar über VPN:               │
+    │    192.168.1.x Heimnetz  ✓          │
+    │    8.8.8.8     Internet   ✓          │
+    └──────────────────────────────────────┘
+```
 
-1. pfSense → `VPN` → `OpenVPN` → `Client Export`
-2. Export Type: **Inline Configuration (.ovpn)**
-3. Profil-Datei als `config/vpn/dashboard.ovpn` im Repository ablegen
-   (die Datei wird durch `.gitignore` geschützt und nie ins Repo eingecheckt)
+---
 
-### VPN auf dem RPi einrichten
+### WiFi konfigurieren
 
 ```bash
-# Einmalig nach dem RPi-Setup ausführen
-sudo ./scripts/setup-vpn.sh --profile config/vpn/dashboard.ovpn --user VPN_BENUTZERNAME
+# Verfügbare Netzwerke anzeigen
+sudo ./scripts/setup-wifi.sh --list
 
-# Passwort wird interaktiv abgefragt (oder via --password FLAG)
+# Mit WLAN verbinden (interaktiv)
+sudo ./scripts/setup-wifi.sh
+
+# Mit Parametern (für Scripting/CI)
+sudo ./scripts/setup-wifi.sh --ssid "Heimnetzwerk" --password "geheim"
+
+# Mit Priorität (höhere Zahl = bevorzugtes Netz)
+sudo ./scripts/setup-wifi.sh --ssid "Heimnetzwerk" --password "geheim" --priority 20
+```
+
+Das Skript nutzt `nmcli` (NetworkManager, Standard auf RPi OS Bookworm).
+Verbindungen sind persistent und verbinden sich nach Neustart automatisch.
+
+```bash
+# Gespeicherte Verbindungen
+nmcli connection show
+
+# Verbindungsstatus
+nmcli device status
+```
+
+---
+
+### VPN einrichten (pfSense → RPi)
+
+#### Voraussetzungen
+
+- pfSense mit konfiguriertem OpenVPN-Server (Remote Access / User Auth)
+- VPN-Benutzer in pfSense angelegt: `System → User Manager`
+- Öffentliche IP oder DynDNS für den pfSense-Router
+- OpenVPN-Profil exportiert: `VPN → OpenVPN → Client Export → Inline Configuration (.ovpn)`
+
+#### Profil ablegen und VPN einrichten
+
+```bash
+# Profil-Datei ablegen (wird durch .gitignore geschützt)
+cp /pfad/zum/export.ovpn config/vpn/dashboard.ovpn
+
+# VPN-Client einrichten (Passwort wird interaktiv abgefragt)
+sudo ./scripts/setup-vpn.sh --profile config/vpn/dashboard.ovpn --user VPN_BENUTZERNAME
 ```
 
 Das Skript:
 - Installiert `openvpn` und `resolvconf`
 - Kopiert das Profil nach `/etc/openvpn/client/dashboard.conf`
-- Speichert Credentials in `/etc/openvpn/client/dashboard.creds` (chmod 600)
-- Erstellt und aktiviert den systemd-Service `openvpn-client@dashboard`
-- VPN startet automatisch beim Boot
+- Speichert Credentials in `/etc/openvpn/client/dashboard.creds` (chmod 600, nur root)
+- Aktiviert den systemd-Service `openvpn-client@dashboard` (Autostart beim Boot)
 
-### VPN-Verwaltung
+#### VPN-Verwaltung
 
 ```bash
-# Status
-systemctl status openvpn-client@dashboard
+systemctl status openvpn-client@dashboard     # Status
+journalctl -u openvpn-client@dashboard -f     # Logs
+systemctl restart openvpn-client@dashboard    # Neustart
+systemctl disable openvpn-client@dashboard    # Autostart deaktivieren
 
-# Logs verfolgen
-journalctl -u openvpn-client@dashboard -f
-
-# VPN manuell stoppen/starten
-systemctl stop openvpn-client@dashboard
-systemctl start openvpn-client@dashboard
-
-# VPN deaktivieren (kein Autostart mehr)
-systemctl disable openvpn-client@dashboard
-
-# Profil aktualisieren (z.B. nach Zertifikatserneuerung)
+# Profil aktualisieren (nach Zertifikatserneuerung)
 sudo ./scripts/setup-vpn.sh --profile config/vpn/neues_profil.ovpn --user BENUTZERNAME
 ```
 
-### Hinweise
+#### pfSense — Server-Konfiguration (Kurzfassung)
 
-- `config/vpn/*.ovpn`, `*.key`, `*.crt` und `credentials`-Dateien sind in `.gitignore`
-- Beispiel-Profilstruktur: `config/vpn/dashboard.ovpn.example`
-- Wenn kein VPN aktiv ist, verbindet sich das Panel nur im lokalen Netz
-- Touch-Wake und Display-Steuerung funktionieren weiterhin lokal am Gerät,
-  auch wenn der VPN-Tunnel kurz unterbrochen ist (MQTT reconnect-Mechanismus)
+Die vollständige Anleitung liegt unter `config/network/pfsense-openvpn-server.md`.
+
+Kritische Einstellungen auf dem OpenVPN-Server:
+
+| Einstellung | Wert | Warum |
+|-------------|------|-------|
+| **Topology** | `subnet` | Voraussetzung für LAN-Routing hinter Client |
+| **IPv4 Local Network/s** | `192.168.1.0/24` | Heimnetz an Clients pushen |
+| **IPv4 Remote Network/s** | `172.16.100.0/24` | Gerätesub des RPi |
+| **Client-to-Client** | ✓ | Clients dürfen sich gegenseitig erreichen |
+
+Client Specific Override für den RPi (Common Name = VPN-Benutzername):
+
+```
+IPv4 Tunnel Network:   10.8.0.10/24       ← feste VPN-IP für den RPi
+IPv4 Remote Network/s: 172.16.100.0/24    ← Gerätesub hinter dem RPi
+Custom Options:        iroute 172.16.100.0 255.255.255.0
+```
+
+Firewall-Regeln (OpenVPN-Interface):
+```
+Pass  Any  VPN net → LAN net          # VPN-Clients → Heimnetz
+Pass  Any  VPN net → 172.16.100.0/24  # Heimnetz → Gerätesub
+```
+
+---
+
+### Ethernet-LAN für angebundene Geräte einrichten
+
+Benötigt einen USB-Ethernet-Adapter (eth1) oder einen zweiten integrierten Port.
+Der RPi wird zum Router: angebundene Geräte erhalten DHCP und tunneln via VPN ins Heimnetz.
+
+```bash
+# Standardkonfiguration (eth1, Subnetz 172.16.100.0/24)
+sudo ./scripts/setup-lan-routing.sh
+
+# Mit eigenen Parametern
+sudo ./scripts/setup-lan-routing.sh \
+  --lan-iface eth1 \
+  --lan-gateway 172.16.100.1 \
+  --dhcp-range 172.16.100.100 172.16.100.200 \
+  --vpn-iface tun0
+```
+
+Das Skript richtet ein:
+- **Statische IP** auf eth1 via NetworkManager
+- **dnsmasq** — DHCP-Server für angebundene Geräte
+- **nftables** — NAT (MASQUERADE) für eth1 → tun0 und eth1 → eth0 (Fallback ohne VPN)
+- **OpenVPN-Hooks** — stellen Routing nach Tunnel-Aufbau sicher
+
+Angebundene Geräte benötigen keinerlei VPN-Konfiguration — der RPi übernimmt das
+vollständig transparent (NAT + Routing).
+
+#### Verbindungstest
+
+```bash
+# Auf dem RPi
+ip addr show eth1     # → 172.16.100.1 erwartet
+ip addr show tun0     # → 10.8.0.10 erwartet
+nft list ruleset      # NAT-Regeln prüfen
+
+# Vom angebundenen Gerät (172.16.100.x)
+ping 172.16.100.1     # RPi erreichbar
+ping 192.168.1.1      # Heimnetz-Gateway via VPN
+```
+
+#### Hinweise
+
+- `config/vpn/*.ovpn`, `*.key`, `*.crt`, `credentials`-Dateien sind durch `.gitignore` geschützt
+- Ohne aktiven VPN-Tunnel fällt NAT auf den WAN-Uplink (eth0/wlan0) zurück
+- Touch-Wake und Display-Steuerung funktionieren auch bei kurzer VPN-Unterbrechung (MQTT reconnect)
+- Für bidirektionalen Zugriff (Heimnetz → angebundene Geräte) muss der CCD-Eintrag in pfSense korrekt gesetzt sein (`iroute`)
 
 ## Entwicklungs-Workflow
 
