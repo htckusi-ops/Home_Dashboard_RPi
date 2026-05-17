@@ -1,6 +1,9 @@
 {
   "panel_id": "kitchen",
   "panel_name": "Küche",
+  "network": {
+    "listen": "127.0.0.1"
+  },
   "mqtt": {
     "broker": "ws://homeserver.local:9001",
     "clientId": "dashboard_kitchen"

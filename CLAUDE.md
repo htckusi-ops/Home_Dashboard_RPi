@@ -410,12 +410,32 @@ Die wichtigsten Felder in `frontend/public/panel.json`:
 ```json
 {
   "panel_id": "kitchen",
+  "network": {
+    "listen": "127.0.0.1"
+  },
   "mqtt": {
     "broker": "ws://ZENTRALSERVER_IP:9001",
     "clientId": "dashboard_kitchen"
   }
 }
 ```
+
+#### `network.listen` — Webinterface-Erreichbarkeit
+
+| Wert | Wirkung |
+|------|---------|
+| `"127.0.0.1"` | **Standard** — nur lokal (Chromium-Kiosk auf dem RPi selbst) |
+| `"0.0.0.0"` | Alle Interfaces — im lokalen Netz erreichbar (z.B. für Fernzugriff per Browser) |
+
+Nginx wird beim Setup mit der konfigurierten Adresse gebunden:
+```
+listen 127.0.0.1:4173;   ← Standard
+listen 0.0.0.0:4173;     ← wenn network.listen = "0.0.0.0"
+```
+
+Nach einer Änderung an `network.listen` muss `setup-rpi.sh` erneut ausgeführt werden
+(oder `nginx -t && systemctl reload nginx` nach manuellem Bearbeiten von
+`/etc/nginx/sites-available/dashboard`).
 
 ### Node-RED Flows auf Zentralserver importieren
 

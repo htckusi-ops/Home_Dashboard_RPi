@@ -67,9 +67,24 @@ npm run build
 log "Frontend gebaut in ${DASHBOARD_DIR}/frontend/dist"
 
 log "Nginx konfigurieren (statisches Frontend ausliefern)..."
+
+# Listen-Adresse aus panel.json lesen — Standard: 127.0.0.1 (nur lokal).
+# Auf "0.0.0.0" setzen um das Interface im Netzwerk erreichbar zu machen.
+LISTEN_ADDR=$(jq -r '.network.listen // "127.0.0.1"' \
+    "${DASHBOARD_DIR}/frontend/public/panel.json" 2>/dev/null || echo "127.0.0.1")
+
+# Nur erlaubte Werte akzeptieren
+case "$LISTEN_ADDR" in
+    127.0.0.1|0.0.0.0|localhost) ;;
+    *) log "WARNUNG: Ungültige network.listen-Adresse '${LISTEN_ADDR}', falle auf 127.0.0.1 zurück"
+       LISTEN_ADDR="127.0.0.1" ;;
+esac
+
+log "Nginx hört auf: ${LISTEN_ADDR}:${FRONTEND_PORT}"
+
 cat > /etc/nginx/sites-available/dashboard << EOF
 server {
-    listen ${FRONTEND_PORT};
+    listen ${LISTEN_ADDR}:${FRONTEND_PORT};
     root ${DASHBOARD_DIR}/frontend/dist;
     index index.html;
     location / {
