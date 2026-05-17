@@ -6,12 +6,12 @@ export default function CamerasView() {
   const cameras = config?.cameras ? Object.entries(config.cameras) : []
 
   function openCamera(cameraId, camera) {
-    publishPanel('override/camera/set', JSON.stringify({
+    publishPanel('override/camera/set', {
       camera_id: cameraId,
       camera_url: camera.url,
       camera_name: camera.name,
       duration_seconds: 120,
-    }))
+    })
   }
 
   return (

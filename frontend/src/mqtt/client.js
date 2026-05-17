@@ -13,8 +13,9 @@ function buildSubscriptions() {
   const prefix = getTopicPrefix()
   return [
     `${prefix}/display/state`,
-    `${prefix}/display/override/state`,
     `${prefix}/view/state`,
+    `${prefix}/pin/result`,
+    `${prefix}/mode/state`,
     `${prefix}/wake_on_motion/state`,
     `${prefix}/blanking/inhibit/state`,
     `${prefix}/quickmenu/state`,
@@ -66,6 +67,27 @@ function handleMessage(topic, payload) {
 
   if (topic === `${prefix}/override/state`) {
     store.setActiveOverride(data && data.type ? data : null)
+    return
+  }
+
+  if (topic === `${prefix}/pin/result`) {
+    if (data && data.success) {
+      store.setAdultSession(data.expires_at ?? null)
+      store.hidePinPad()
+      store.setPinResult('success')
+    } else {
+      store.setPinResult('error')
+    }
+    return
+  }
+
+  if (topic === `${prefix}/mode/state`) {
+    const mode = typeof data === 'object' ? data.mode : data
+    if (mode === 'adult') {
+      store.setMode('adult')
+    } else {
+      store.clearAdultSession()
+    }
     return
   }
 
@@ -145,7 +167,30 @@ function publish(topic, payload, opts = { qos: 1 }) {
 function publishPanel(subtopic, payload) {
   const topic = `${getTopicPrefix()}/${subtopic}`
   const data = typeof payload === 'object' ? JSON.stringify(payload) : String(payload)
+
+  if (!client || !client.connected) {
+    applyLocalFallback(subtopic, payload)
+    return
+  }
+
   publish(topic, data)
+}
+
+function applyLocalFallback(subtopic, payload) {
+  const store = usePanelStore.getState()
+
+  if (subtopic === 'view/set') {
+    store.setCurrentView(typeof payload === 'string' ? payload : payload)
+    return
+  }
+  if (subtopic === 'wake_on_motion/set') {
+    store.setWakeOnMotion(payload === 'true' || payload === true)
+    return
+  }
+  if (subtopic === 'display/set') {
+    store.setDisplayState(payload)
+    return
+  }
 }
 
 function publishGlobal(subtopic, payload) {

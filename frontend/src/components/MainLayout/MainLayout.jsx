@@ -13,6 +13,7 @@ export default function MainLayout({ children }) {
   const [time, setTime] = useState(new Date())
   const {
     mode,
+    adult_session_expires_at,
     quick_menu_open,
     pin_pad_visible,
     keyboard_visible,
@@ -21,12 +22,21 @@ export default function MainLayout({ children }) {
     config,
     openQuickMenu,
     showPinPad,
+    clearAdultSession,
   } = usePanelStore()
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    if (mode !== 'adult' || !adult_session_expires_at) return
+    const remaining = new Date(adult_session_expires_at) - Date.now()
+    if (remaining <= 0) { clearAdultSession(); return }
+    const t = setTimeout(() => clearAdultSession(), remaining)
+    return () => clearTimeout(t)
+  }, [mode, adult_session_expires_at, clearAdultSession])
 
   const formattedTime = time.toLocaleTimeString('de-DE', {
     hour: '2-digit',
@@ -71,17 +81,32 @@ export default function MainLayout({ children }) {
             <span className="text-sm text-gray-400">{config.panel_name}</span>
           )}
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${mqttIndicatorColor}`} />
+            <div className={`w-2 h-2 rounded-full ${mqttIndicatorColor}`} title={mqtt_status} />
             <span className="text-xs text-gray-500 uppercase tracking-wide">
               {mode === 'adult' ? 'Erwachsenen-Modus' : 'Kinder-Modus'}
             </span>
+            {mode === 'adult' && adult_session_expires_at && (
+              <span className="text-xs text-amber-400">
+                {Math.max(0, Math.ceil((new Date(adult_session_expires_at) - time) / 60000))} Min.
+              </span>
+            )}
           </div>
           {mode === 'kids' && (
             <button
               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded-lg min-h-[44px] text-gray-300"
               onPointerDown={showPinPad}
+              aria-label="Erwachsenen-Modus entsperren"
             >
               🔓
+            </button>
+          )}
+          {mode === 'adult' && (
+            <button
+              className="px-3 py-1 text-sm bg-amber-900/60 hover:bg-amber-900 rounded-lg min-h-[44px] text-amber-300"
+              onPointerDown={clearAdultSession}
+              aria-label="Erwachsenen-Modus beenden"
+            >
+              🔒
             </button>
           )}
         </div>

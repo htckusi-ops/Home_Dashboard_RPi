@@ -68,7 +68,7 @@ export default function QuickEdgeMenu() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-          <section className="bg-gray-750 bg-gray-900 rounded-xl p-4 border border-gray-700">
+          <section className="bg-gray-900 rounded-xl p-4 border border-gray-700">
             <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Bildschirm-Timer</p>
 
             {blanking_suppressed ? (

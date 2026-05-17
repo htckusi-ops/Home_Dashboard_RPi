@@ -38,6 +38,7 @@ const usePanelStore = create((set, get) => ({
   display_timeout_seconds: 180,
   quick_menu_open: false,
   pin_pad_visible: false,
+  pin_last_result: null,
   keyboard_visible: false,
   mqtt_status: 'disconnected',
   config: null,
@@ -92,9 +93,11 @@ const usePanelStore = create((set, get) => ({
 
   closeQuickMenu: () => set({ quick_menu_open: false }),
 
-  showPinPad: () => set({ pin_pad_visible: true }),
+  showPinPad: () => set({ pin_pad_visible: true, pin_last_result: null }),
 
-  hidePinPad: () => set({ pin_pad_visible: false }),
+  hidePinPad: () => set({ pin_pad_visible: false, pin_last_result: null }),
+
+  setPinResult: (result) => set({ pin_last_result: result }),
 
   showKeyboard: () => set({ keyboard_visible: true }),
 

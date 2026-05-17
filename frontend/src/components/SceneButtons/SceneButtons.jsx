@@ -9,7 +9,7 @@ export default function SceneButtons({ scenes }) {
   const sceneList = scenes ?? config?.scenes ?? []
 
   function handleScene(sceneId) {
-    publishGlobal('scenes/trigger', JSON.stringify({ scene_id: sceneId }))
+    publishGlobal('scenes/trigger', { scene_id: sceneId })
   }
 
   if (sceneList.length === 0) {

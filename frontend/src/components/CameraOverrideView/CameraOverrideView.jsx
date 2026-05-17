@@ -24,7 +24,7 @@ export default function CameraOverrideView({ override }) {
   }, [override.expires_at])
 
   function handleClose() {
-    publishPanel('override/restore', JSON.stringify({ reason: 'user_close' }))
+    publishPanel('override/restore', { reason: 'user_close' })
   }
 
   const cameraUrl = override.camera_url || ''
