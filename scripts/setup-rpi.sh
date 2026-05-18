@@ -24,8 +24,14 @@ apt-get update -qq
 apt-get upgrade -y -qq
 
 log "Notwendige Pakete installieren..."
+# Paketname hat sich mit RPi OS Bookworm geändert: chromium-browser → chromium
+if apt-cache show chromium &>/dev/null 2>&1; then
+    CHROMIUM_PKG="chromium"
+else
+    CHROMIUM_PKG="chromium-browser"
+fi
 apt-get install -y -qq \
-    chromium-browser \
+    "$CHROMIUM_PKG" \
     xdotool \
     unclutter \
     curl \

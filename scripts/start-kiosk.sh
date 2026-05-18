@@ -32,7 +32,10 @@ until curl -sf "$FRONTEND_URL" -o /dev/null 2>/dev/null; do
 done
 
 log "Launching Chromium in kiosk mode..."
-chromium-browser \
+# Binary-Name: 'chromium' auf Bookworm, 'chromium-browser' auf älteren Systemen
+CHROMIUM_BIN="chromium"
+command -v chromium &>/dev/null || CHROMIUM_BIN="chromium-browser"
+$CHROMIUM_BIN \
     --kiosk \
     --no-sandbox \
     --disable-infobars \
