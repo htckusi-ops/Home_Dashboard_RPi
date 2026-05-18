@@ -1,0 +1,32 @@
+# Beispiel-Struktur eines pfSense-exportierten OpenVPN-Profils (Inline-Format).
+# Dieses Profil exportieren: pfSense → VPN → OpenVPN → Client Export
+#   → Export Type: "Inline Configuration (.ovpn)"
+#
+# Datei ablegen als: config/vpn/dashboard.ovpn  (wird durch .gitignore geschützt)
+# Danach VPN einrichten: sudo ./scripts/setup-vpn.sh
+
+dev tun
+persist-tun
+persist-key
+cipher AES-256-GCM
+auth SHA256
+tls-client
+client
+resolv-retry infinite
+remote vpn.dein-heimserver.example.com 1194 udp
+verify-x509-name "pfSense-openvpn-server" name
+auth-user-pass
+remote-cert-tls server
+
+# Eingebettetes CA-Zertifikat (von pfSense automatisch generiert)
+<ca>
+-----BEGIN CERTIFICATE-----
+... (pfSense CA-Zertifikat hier) ...
+-----END CERTIFICATE-----
+</ca>
+
+# TLS-Authentifizierungskey (falls konfiguriert)
+# <tls-auth>
+# ... key ...
+# </tls-auth>
+# key-direction 1

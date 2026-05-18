@@ -1,0 +1,10 @@
+# VPN-Profile und Credentials dürfen NICHT ins Repository
+*.ovpn
+*.key
+*.crt
+*.p12
+*.pem
+*.pfx
+credentials
+*.creds
+secrets

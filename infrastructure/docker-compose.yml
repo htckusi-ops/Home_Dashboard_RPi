@@ -1,0 +1,86 @@
+# Zentralserver-Infrastruktur — läuft NICHT auf dem Raspberry Pi.
+# Voraussetzung: cp .env.example .env  und Werte anpassen.
+# Start: docker compose up -d
+
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: dashboard_mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      - dashboard_net
+
+  node-red:
+    image: nodered/node-red:3.1
+    container_name: dashboard_node_red
+    restart: unless-stopped
+    ports:
+      - "1880:1880"
+    environment:
+      - TZ=Europe/Berlin
+      - NR_KITCHEN_PIN=${NR_KITCHEN_PIN:-1234}
+      - HA_URL=${HA_URL:-http://homeassistant.local:8123}
+      - HA_TOKEN=${HA_TOKEN:-}
+      - SONOS_ROOM=${SONOS_ROOM:-Küche}
+      - SONOS_API_URL=${SONOS_API_URL:-http://sonos-api:5005}
+    volumes:
+      - node_red_data:/data
+      - ../node-red/flows:/data/flows_src:ro
+      - ./node-red/settings.js:/data/settings.js:ro
+    networks:
+      - dashboard_net
+    depends_on:
+      - mosquitto
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: dashboard_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SERVER_ROOT_URL=http://grafana.local:3000
+      - TZ=Europe/Berlin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - dashboard_net
+
+  # Home Assistant is typically run separately on the RPi or another host.
+  # Uncomment and adjust if you want to run it in Docker here.
+  #
+  # homeassistant:
+  #   image: ghcr.io/home-assistant/home-assistant:stable
+  #   container_name: dashboard_homeassistant
+  #   restart: unless-stopped
+  #   privileged: true
+  #   network_mode: host
+  #   environment:
+  #     - TZ=Europe/Berlin
+  #   volumes:
+  #     - ha_config:/config
+  #   depends_on:
+  #     - mosquitto
+
+volumes:
+  mosquitto_data:
+  mosquitto_logs:
+  node_red_data:
+  grafana_data:
+  # ha_config:
+
+networks:
+  dashboard_net:
+    driver: bridge

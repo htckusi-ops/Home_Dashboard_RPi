@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    @apply h-full w-full overflow-hidden bg-gray-900 text-white;
+    touch-action: manipulation;
+  }
+
+  button {
+    @apply select-none cursor-pointer;
+  }
+}
+
+@layer utilities {
+  .touch-target {
+    @apply min-h-[60px] min-w-[60px];
+  }
+}

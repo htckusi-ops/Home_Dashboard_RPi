@@ -1,0 +1,27 @@
+{
+  "panel_id": "kitchen",
+  "mqtt": {
+    "broker": "homeserver.local",
+    "port": 1883
+  },
+  "camera": {
+    "index": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 10
+  },
+  "detection": {
+    "motion_threshold": 5000,
+    "presence_cooldown_seconds": 30,
+    "face_check_interval_seconds": 2,
+    "face_confidence": 0.6,
+    "adult_session_seconds": 300,
+    "adult_cooldown_seconds": 120
+  },
+  "features": {
+    "presence": true,
+    "face_recognition": true,
+    "adult_persons": ["mama", "papa"]
+  },
+  "known_faces_dir": "known_faces"
+}

@@ -1,0 +1,68 @@
+let _config = null
+
+async function loadConfig() {
+  if (_config) return _config
+
+  try {
+    const response = await fetch('/panel.json')
+    if (!response.ok) throw new Error('Failed to load panel.json')
+    _config = await response.json()
+  } catch {
+    console.warn('Using default config - place panel.json in /public/')
+    _config = getDefaultConfig()
+  }
+
+  return _config
+}
+
+function getDefaultConfig() {
+  return {
+    panel_id: 'kitchen',
+    panel_name: 'Küche',
+    mqtt: {
+      broker: 'ws://localhost:9001',
+      clientId: 'dashboard_kitchen',
+    },
+    display: {
+      timeout_seconds: 180,
+      default_blanking_suppression_seconds: 14400,
+      blanking_step_minutes: 30,
+    },
+    adult: {
+      pin: '1234',
+      session_timeout_seconds: 300,
+    },
+    cameras: {
+      entrance: {
+        url: 'http://zoneminder.local/zm/index.php?view=live&mid=1',
+        name: 'Eingang',
+      },
+    },
+    embeds: {
+      grafana: {
+        url: 'http://grafana.local:3000/d/home',
+        name: 'Grafana',
+      },
+      homeassistant: {
+        url: 'http://homeassistant.local:8123',
+        name: 'Home Assistant',
+      },
+    },
+    scenes: [
+      { id: 'yoga', name: 'Yoga', icon: '🧘', color: '#6366f1' },
+      { id: 'kinderparty', name: 'Kinderparty', icon: '🎉', color: '#f59e0b' },
+      { id: 'abendessen', name: 'Abendessen', icon: '🍽️', color: '#ef4444' },
+      { id: 'nachtmodus', name: 'Nachtmodus', icon: '🌙', color: '#1e293b' },
+    ],
+    sonos: {
+      playlists: [
+        { id: 'kids_songs', name: 'Kinderlieder', icon: '🎵' },
+        { id: 'radio_energy', name: 'Energy Radio', icon: '📻' },
+        { id: 'classical', name: 'Klassik', icon: '🎻' },
+      ],
+      kids_max_volume: 50,
+    },
+  }
+}
+
+export { loadConfig }

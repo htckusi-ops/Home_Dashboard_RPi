@@ -1,0 +1,80 @@
+{
+  "mqtt": {
+    "broker_host": "localhost",
+    "broker_port": 1883,
+    "websocket_port": 9001
+  },
+  "panels": {
+    "kitchen": {
+      "panel_id": "kitchen",
+      "panel_name": "Küche",
+      "location": "kitchen"
+    }
+  },
+  "home_assistant": {
+    "url": "http://homeassistant.local:8123",
+    "token": "REPLACE_WITH_HA_LONG_LIVED_TOKEN"
+  },
+  "zigbee2mqtt": {
+    "base_topic": "zigbee2mqtt",
+    "motion_sensors": {
+      "kitchen_motion": {
+        "friendly_name": "Küche Bewegungsmelder",
+        "panel_id": "kitchen"
+      }
+    }
+  },
+  "sonos": {
+    "room": "Küche",
+    "coordinator_ip": "192.168.1.100"
+  },
+  "calendars": {
+    "fetch_interval_minutes": 5,
+    "lookahead_days": 7,
+    "sources": {
+      "google_family": {
+        "type": "ical",
+        "url": "https://calendar.google.com/calendar/ical/CALENDAR_ID/private-TOKEN/basic.ics",
+        "_comment": "Google Calendar: Einstellungen → Kalender → Kalender integrieren → Geheime Adresse im iCal-Format"
+      },
+      "nextcloud_work": {
+        "type": "caldav",
+        "url": "https://nextcloud.example.com/remote.php/dav/calendars/USERNAME/CALENDAR/",
+        "username": "USERNAME",
+        "password": "${NC_CAL_PASSWORD}",
+        "_comment": "Nextcloud: Kalender-App → Teilen → App-Passwort unter Sicherheit → App-Passwörter"
+      },
+      "office365_shared": {
+        "type": "ical",
+        "url": "https://outlook.office365.com/owa/calendar/TOKEN/calendar.ics",
+        "_comment": "Office 365: Outlook Web → Kalender → Kalender veröffentlichen → ICS-URL kopieren"
+      }
+    }
+  },
+  "scenes": {
+    "yoga": {
+      "id": "yoga",
+      "name": "Yoga",
+      "ha_scene_id": "scene.yoga",
+      "sonos_playlist": null
+    },
+    "kinderparty": {
+      "id": "kinderparty",
+      "name": "Kinderparty",
+      "ha_scene_id": "scene.kinderparty",
+      "sonos_playlist": "kids_songs"
+    },
+    "abendessen": {
+      "id": "abendessen",
+      "name": "Abendessen",
+      "ha_scene_id": "scene.abendessen",
+      "sonos_playlist": null
+    },
+    "nachtmodus": {
+      "id": "nachtmodus",
+      "name": "Nachtmodus",
+      "ha_scene_id": "scene.nachtmodus",
+      "sonos_playlist": null
+    }
+  }
+}
