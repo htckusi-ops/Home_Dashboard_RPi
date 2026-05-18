@@ -65,6 +65,107 @@
     ],
     "kids_max_volume": 50
   },
+  "weather": {
+    "enabled": true,
+    "location": "Zürich",
+    "country": "CH"
+  },
+  "sensors": {
+    "ticker": {
+      "enabled": true,
+      "interval_seconds": 5
+    },
+    "groups": {
+      "indoor": {
+        "label": "Innen",
+        "sensors": {
+          "temp_wohnzimmer": {
+            "label": "Wohnzimmer",
+            "topic": "zigbee2mqtt/sensor_wohnzimmer/temperature",
+            "unit": "°C",
+            "decimals": 1,
+            "stale_minutes": 15,
+            "ticker": true
+          },
+          "temp_kueche": {
+            "label": "Küche",
+            "topic": "zigbee2mqtt/sensor_kueche/temperature",
+            "unit": "°C",
+            "decimals": 1,
+            "stale_minutes": 15,
+            "ticker": true
+          },
+          "humidity_wohnzimmer": {
+            "label": "Feuchte WZ",
+            "topic": "zigbee2mqtt/sensor_wohnzimmer/humidity",
+            "unit": "%",
+            "decimals": 0,
+            "stale_minutes": 15
+          }
+        }
+      },
+      "outdoor": {
+        "label": "Aussen",
+        "sensors": {
+          "temp_aussen": {
+            "label": "Aussen",
+            "topic": "zigbee2mqtt/sensor_aussen/temperature",
+            "unit": "°C",
+            "decimals": 1,
+            "stale_minutes": 30,
+            "ticker": true
+          },
+          "humidity_aussen": {
+            "label": "Feuchte Aussen",
+            "topic": "zigbee2mqtt/sensor_aussen/humidity",
+            "unit": "%",
+            "decimals": 0,
+            "stale_minutes": 30
+          }
+        }
+      },
+      "energy": {
+        "label": "Energie",
+        "grafana_url": "http://grafana.local:3000/d/energy",
+        "sensors": {
+          "solar_aktuell": {
+            "label": "Solar aktuell",
+            "topic": "home/solar/power_w",
+            "unit": "kW",
+            "factor": 0.001,
+            "decimals": 2,
+            "stale_minutes": 5,
+            "ticker": true
+          },
+          "solar_tag": {
+            "label": "Solar heute",
+            "topic": "home/solar/energy_today_wh",
+            "unit": "kWh",
+            "factor": 0.001,
+            "decimals": 1,
+            "stale_minutes": 60,
+            "grafana_url": "http://grafana.local:3000/d/solar"
+          },
+          "verbrauch_haus": {
+            "label": "Verbrauch",
+            "topic": "home/power/total_w",
+            "unit": "kW",
+            "factor": 0.001,
+            "decimals": 2,
+            "stale_minutes": 5
+          },
+          "waermepumpe": {
+            "label": "Wärmepumpe",
+            "topic": "home/power/heatpump_w",
+            "unit": "kW",
+            "factor": 0.001,
+            "decimals": 2,
+            "stale_minutes": 5
+          }
+        }
+      }
+    }
+  },
   "calendars": {
     "sources": {
       "google_family": {

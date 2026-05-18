@@ -56,6 +56,12 @@ const usePanelStore = create((set, get) => ({
   calendar_profile: null,
   calendar_overrides: loadCalendarOverrides(),
 
+  // Sensors  { [sensorId]: { raw: any, lastReceived: number } }
+  sensor_values: {},
+
+  // Weather
+  weather_data: null,
+
   setConfig: (config) => set({
     config,
     panel_id: config.panel_id,
@@ -121,6 +127,16 @@ const usePanelStore = create((set, get) => ({
   setCalendarEvents: (calendar_events) => set({ calendar_events }),
 
   setCalendarProfile: (calendar_profile) => set({ calendar_profile }),
+
+  setSensorValue: (sensorId, raw) =>
+    set((state) => ({
+      sensor_values: {
+        ...state.sensor_values,
+        [sensorId]: { raw, lastReceived: Date.now() },
+      },
+    })),
+
+  setWeatherData: (weather_data) => set({ weather_data }),
 
   setCalendarOverrides: (overrides) => {
     try {

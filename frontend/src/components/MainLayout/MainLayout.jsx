@@ -5,6 +5,7 @@ import QuickEdgeMenu from '../QuickEdgeMenu/QuickEdgeMenu.jsx'
 import PinPad from '../PinPad/PinPad.jsx'
 import OnScreenKeyboard from '../OnScreenKeyboard/OnScreenKeyboard.jsx'
 import CameraOverrideView from '../CameraOverrideView/CameraOverrideView.jsx'
+import SensorTicker from '../SensorDisplay/SensorTicker.jsx'
 
 /**
  * @param {{ children: React.ReactNode }} props
@@ -73,6 +74,7 @@ export default function MainLayout({ children }) {
           <div>
             <p className="text-sm text-gray-400">{formattedDate}</p>
             <p className="text-2xl font-bold text-white">{formattedTime}</p>
+            <SensorTicker />
           </div>
         </div>
 

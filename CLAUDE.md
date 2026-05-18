@@ -635,6 +635,191 @@ Node-RED übereinstimmen (z.B. `google_family`).
 | `ProfileSelector` | `components/CalendarWidget/ProfileSelector.jsx` | Profil-Buttons |
 | `CalendarSettings` | `components/CalendarWidget/CalendarSettings.jsx` | Color Picker + Profil-Editor |
 
+## Sensor-Integration
+
+Live-Messwerte von MQTT-Topics werden direkt im Dashboard angezeigt. Konfiguration in `panel.json` unter `sensors`.
+
+### Sensor-Konfiguration (`panel.json`)
+
+```json
+"sensors": {
+  "ticker": {
+    "enabled": true,
+    "interval_seconds": 5
+  },
+  "groups": {
+    "energy": {
+      "label": "Energie",
+      "grafana_url": "http://grafana.local:3000/d/energy",
+      "sensors": {
+        "solar_aktuell": {
+          "label": "Solar aktuell",
+          "topic": "home/solar/power_w",
+          "unit": "kW",
+          "factor": 0.001,
+          "decimals": 2,
+          "stale_minutes": 5,
+          "ticker": true,
+          "grafana_url": "http://grafana.local:3000/d/solar"
+        }
+      }
+    }
+  }
+}
+```
+
+| Feld | Typ | Beschreibung |
+|------|-----|-------------|
+| `topic` | string | MQTT-Topic, auf das subscribed wird |
+| `label` | string | Anzeigename |
+| `unit` | string | Einheit: `°C`, `kW`, `kWh`, `W`, `Wh`, `%`, `hPa`, `km/h`, `lx` |
+| `factor` | number | Multiplikator (z.B. `0.001` für W→kW) |
+| `decimals` | number | Nachkommastellen |
+| `stale_minutes` | number | Ab wann gilt der Wert als veraltet (Standard: 15) |
+| `ticker` | bool | Im Ticker auf dem Hauptscreen rotieren |
+| `grafana_url` | string | Grafana-Panel URL für Verlaufsgrafik |
+
+### Ticker im Header
+
+Wenn `sensors.ticker.enabled = true`, rotiert der `SensorTicker` im Haupt-Header unterhalb der Uhr durch alle Sensoren mit `"ticker": true`. Wechselintervall: `ticker.interval_seconds` (Standard: 5s).
+
+### Staleness-Warnung
+
+Ein Sensor gilt als veraltet, wenn seit `stale_minutes` keine neue MQTT-Nachricht empfangen wurde. Stale-Werte werden in Amber angezeigt (`⚠`). Die Anzahl veralteter Sensoren erscheint auch im Toolbar-Badge der Sensor-Detailansicht.
+
+### MQTT-Topic (Sensoren)
+
+Das Frontend subscribed direkt auf die in `sensors.groups.<group>.sensors.<id>.topic` definierten Topics. Es sind beliebige MQTT-Topics möglich (Zigbee2MQTT, Home Assistant, Node-RED, eigene).
+
+Beispiele:
+- `zigbee2mqtt/sensor_wohnzimmer/temperature` → Temperaturwert als Zahl oder `{"temperature": 22.5, ...}`
+- `home/solar/power_w` → Watt-Wert direkt als Zahl
+
+Der Rohwert wird gespeichert und mit `factor` und `decimals` für die Anzeige formatiert.
+
+### Grafana-Verlaufsgrafiken
+
+Verlaufsgrafiken werden als eingebettete iframes aus Grafana geladen. Einrichtung:
+
+1. **Panel in Grafana erstellen**: Grafana → Dashboard → Panel erstellen → Metric/Sensor wählen
+2. **Share-Link kopieren**: Panel-Menü → Share → Embed → Link kopieren (Format: `http://grafana.local:3000/d/<dashboard-id>/<slug>?orgId=1&panelId=<n>`)
+3. **URL in `panel.json` eintragen**: Entweder als `grafana_url` auf Gruppen-Ebene (zeigt Dashboard) oder auf Sensor-Ebene (zeigt einzelnes Panel)
+4. **Grafana CORS erlauben**: Grafana → `grafana.ini` → `[security]` → `allow_embedding = true`
+
+Die URLs werden automatisch um `?theme=dark&kiosk` ergänzt, damit Grafana-Panels ohne Menü und im Dark Mode erscheinen.
+
+### Sensor-Komponenten
+
+| Komponente | Datei | Beschreibung |
+|-----------|-------|-------------|
+| `SensorCard` | `components/SensorDisplay/SensorCard.jsx` | Einzel-Karte mit Wert, Einheit, Stale-Indikator |
+| `SensorTicker` | `components/SensorDisplay/SensorTicker.jsx` | Rotierender Einzeiler im Header |
+| `SensorsView` | `views/SensorsView.jsx` | Vollbild-Detailansicht mit Gruppen + Grafana-Embeds |
+| `sensorUtils` | `components/SensorDisplay/sensorUtils.js` | `formatSensorValue`, `isStale`, `findSensor` |
+
+---
+
+## Wetter-Integration
+
+Wetterdaten werden via Node-RED von der Open-Meteo API (nutzt MeteoSwiss ICON-Modell) abgerufen und per MQTT an das Frontend gepusht.
+
+### Architektur
+
+```
+Node-RED (Zentralserver)
+  ├─ Nominatim (OpenStreetMap) → Ortsname → lat/lon (einmalig beim Start)
+  └─ Open-Meteo API (MeteoSwiss ICON-CH Modell) → alle 10 Minuten
+       └─ Aktuell, stündlich (24h), täglich (7 Tage)
+
+MQTT: dashboard/panels/<panel_id>/weather/state
+  payload: { location, updated_at, current: {...}, hourly: [...], daily: [...] }
+
+Frontend
+  ├─ WeatherWidget  → Kompaktkarte im Hauptmenü (Temp + Icon + Min/Max)
+  └─ WeatherView    → Vollbild: aktuelle Bedingungen, Stunden-Strip, 7-Tage
+```
+
+### Node-RED Setup
+
+#### 1. Flow importieren
+
+1. Node-RED UI öffnen: `http://zentralserver:1880/red`
+2. Hamburger-Menü → Import → Datei: `node-red/flows/weather-addon.json`
+3. MQTT-Broker-Node anpassen (doppelklick auf `Dashboard Broker`, IP/Port setzen)
+4. Umgebungsvariablen setzen (siehe unten)
+5. Deploy klicken
+
+#### 2. Umgebungsvariablen
+
+Im Node-RED-Tab auf dem Flow (Doppelklick auf den Tab-Hintergrund) oder via `~/.node-red/.env`:
+
+| Variable | Beispiel | Beschreibung |
+|----------|---------|-------------|
+| `WEATHER_LOCATION` | `Zürich` | Ortsname für Nominatim-Geocoding |
+| `WEATHER_LAT` | `47.3769` | (optional) Direkte Koordinaten statt Geocoding |
+| `WEATHER_LON` | `8.5417` | (optional) Direkte Koordinaten statt Geocoding |
+| `WEATHER_PANELS` | `kitchen,wohnzimmer` | Komma-getrennte Panel-IDs für MQTT-Publish |
+
+Alternativ können `WEATHER_LOCATION`, `WEATHER_LAT`, `WEATHER_LON` und `WEATHER_PANELS` direkt im `fn_weather_transform`-Function-Node als Defaults hart kodiert werden.
+
+#### 3. Wetter-Konfiguration in `panel.json`
+
+```json
+"weather": {
+  "enabled": true,
+  "location": "Zürich",
+  "country": "CH"
+}
+```
+
+`location` und `country` dienen nur als Anzeigename im Frontend. Die tatsächlichen Koordinaten kommen von Node-RED über das MQTT-Payload.
+
+### MQTT-Topic (Wetter)
+
+| Topic | Richtung | Payload |
+|-------|----------|---------|
+| `dashboard/panels/<id>/weather/state` | NR → Frontend | `{ location, updated_at, current, hourly, daily }` |
+
+#### Payload-Format
+
+```json
+{
+  "location": "Zürich",
+  "updated_at": "2026-05-18T12:00:00.000Z",
+  "current": {
+    "temperature": 22.5,
+    "apparent_temperature": 21.0,
+    "relative_humidity": 65,
+    "precipitation": 0.0,
+    "weather_code": 1,
+    "wind_speed": 12.3,
+    "wind_direction": 225
+  },
+  "hourly": [
+    { "time": "2026-05-18T12:00", "temp": 22.5, "code": 1, "precip_prob": 5 }
+  ],
+  "daily": [
+    { "date": "2026-05-18", "code": 1, "temp_max": 24.3, "temp_min": 15.5, "precip_sum": 0, "sunrise": "05:32", "sunset": "21:05" }
+  ]
+}
+```
+
+### WMO-Wettercodes
+
+Das Frontend mappt WMO-Codes (von Open-Meteo) auf deutsche Bezeichnungen und Emoji-Icons. Mapping in `components/WeatherWidget/weatherCodes.js`.
+
+Wichtigste Codes: `0`=☀️ Klar, `1`=🌤️ Überwiegend klar, `2`=⛅ Teils bewölkt, `3`=☁️ Bewölkt, `45/48`=🌫️ Nebel, `61/63/65`=🌧️ Regen, `71/73/75`=❄️ Schnee, `80/82`=🌦️ Schauer, `95/96/99`=⛈️ Gewitter.
+
+### Wetter-Komponenten
+
+| Komponente | Datei | Beschreibung |
+|-----------|-------|-------------|
+| `WeatherWidget` | `components/WeatherWidget/WeatherWidget.jsx` | Kompaktkarte im Hauptmenü |
+| `WeatherView` | `views/WeatherView.jsx` | Vollbild: Aktuell, Stunden-Strip, 7-Tage-Forecast |
+| `weatherCodes` | `components/WeatherWidget/weatherCodes.js` | WMO-Code → Label/Icon-Mapping |
+
+---
+
 ## Neuen View hinzufügen
 
 1. `frontend/src/views/MeinNeuerView.jsx` erstellen
@@ -669,6 +854,9 @@ Node-RED übereinstimmen (z.B. `google_family`).
 | `SceneButtons` | Konfigurierbares Grid von Szenen-Trigger-Buttons |
 | `SonosKidsMenu` | Playlist-Auswahl + Lautstärke-Kontrolle (Kids-Modus-Cap) |
 | `EmbeddedAppFrame` | Sandboxed iframe-Wrapper für Grafana, HA, ZoneMinder |
+| `SensorCard` | Sensor-Karte mit Live-Wert, Einheit, Stale-Indikator |
+| `SensorTicker` | Rotierender Sensor-Einzeiler im Header (konfigurierbare Sensoren) |
+| `WeatherWidget` | Kompaktes Wetter-Widget im Hauptmenü (Temp + Icon + Min/Max heute) |
 
 ## Sicherheitshinweise
 

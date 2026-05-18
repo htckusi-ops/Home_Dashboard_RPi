@@ -22,6 +22,7 @@ function buildSubscriptions() {
     `${prefix}/override/state`,
     `${prefix}/keyboard/show`,
     `${prefix}/calendar/state`,
+    `${prefix}/weather/state`,
     'dashboard/settings/global',
   ]
 }
@@ -107,17 +108,45 @@ function handleMessage(topic, payload) {
     return
   }
 
+  if (topic === `${prefix}/weather/state`) {
+    if (data && typeof data === 'object') {
+      store.setWeatherData(data)
+    }
+    return
+  }
+
   if (topic === 'dashboard/settings/global') {
     if (data && typeof data === 'object') {
       store.applyServerState(data)
     }
     return
   }
+
+  // Sensor-Topics: topic → sensorId lookup
+  const sensorId = sensorTopicMap[topic]
+  if (sensorId !== undefined) {
+    store.setSensorValue(sensorId, data)
+    return
+  }
+}
+
+// Map topic → sensorId, built once per initMqtt call
+let sensorTopicMap = {}
+
+function buildSensorTopicMap(config) {
+  const map = {}
+  for (const group of Object.values(config?.sensors?.groups ?? {})) {
+    for (const [id, sensor] of Object.entries(group.sensors ?? {})) {
+      if (sensor.topic) map[sensor.topic] = id
+    }
+  }
+  return map
 }
 
 function initMqtt(config) {
   panelId = config.panel_id
   brokerUrl = config.mqtt.broker
+  sensorTopicMap = buildSensorTopicMap(config)
 
   const { setMqttStatus } = usePanelStore.getState()
 
@@ -132,7 +161,10 @@ function initMqtt(config) {
   client.on('connect', () => {
     setMqttStatus('connected')
     const topics = buildSubscriptions()
-    client.subscribe(topics, { qos: 1 }, (err) => {
+    // Sensor topics abonnieren
+    const sensorTopics = Object.keys(sensorTopicMap)
+    const allTopics = sensorTopics.length ? [...topics, ...sensorTopics] : topics
+    client.subscribe(allTopics, { qos: 1 }, (err) => {
       if (err) console.error('MQTT subscribe error:', err)
     })
     publish(`${getTopicPrefix()}/state/request`, JSON.stringify({ request: 'full_state' }))
