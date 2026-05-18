@@ -5,8 +5,8 @@ set -euo pipefail
 # MQTT-Broker und Node-RED laufen auf der zentralen Infrastruktur, nicht hier.
 # Dieses Skript richtet nur das Display-Panel ein.
 
-DASHBOARD_DIR="/home/user/Home_Dashboard_RPi"
-KIOSK_USER="${SUDO_USER:-pi}"
+DASHBOARD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+KIOSK_USER="${SUDO_USER:-${USER:-pi}}"
 FRONTEND_PORT=4173
 
 log() { echo "[setup-rpi] $*"; }

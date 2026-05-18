@@ -89,7 +89,8 @@ copy_config() {
 }
 
 install_service() {
-    log "Installing systemd service: $SERVICE_FILE"
+    local svc_user="${SUDO_USER:-${USER:-pi}}"
+    log "Installing systemd service: $SERVICE_FILE (user: $svc_user)"
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Dashboard Camera Agent
@@ -98,9 +99,9 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/Home_Dashboard_RPi/camera
-ExecStart=/usr/bin/python3 /home/pi/Home_Dashboard_RPi/camera/camera_agent.py
+User=${svc_user}
+WorkingDirectory=${CAMERA_DIR}
+ExecStart=/usr/bin/python3 ${CAMERA_DIR}/camera_agent.py
 Restart=always
 RestartSec=10
 StandardOutput=journal

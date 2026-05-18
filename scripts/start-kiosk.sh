@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DASHBOARD_DIR="/home/user/Home_Dashboard_RPi"
+DASHBOARD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONTEND_PORT=5173
 DISPLAY_VAR="${DISPLAY:-:0}"
 
