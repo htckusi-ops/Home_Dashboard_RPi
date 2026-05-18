@@ -1,0 +1,8 @@
+known_faces/
+config.json
+*.jpg
+*.jpeg
+*.png
+*.pkl
+__pycache__/
+*.pyc
