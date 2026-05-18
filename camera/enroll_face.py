@@ -32,7 +32,7 @@ def main():
         print("Install it with: pip3 install face_recognition")
         sys.exit(1)
 
-    dir_name = args.name
+    dir_name = f"adult_{args.name}" if args.adult else args.name
     person_dir = KNOWN_FACES_DIR / dir_name
     person_dir.mkdir(parents=True, exist_ok=True)
 
