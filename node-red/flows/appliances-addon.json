@@ -1,0 +1,177 @@
+[
+  {
+    "id": "appl_tab",
+    "type": "tab",
+    "label": "Appliances: Tumbler & Waschmaschine",
+    "disabled": false,
+    "info": "State machine for tumbler/dryer and washing machine. Publishes appliance states to MQTT for the dashboard.\n\nEnvironment variables (set on this tab):\n- TUMBLER_RUNNING_W: power threshold for 'running' (default 300)\n- TUMBLER_FINISHING_W: power threshold for 'finishing' (default 50)\n- TUMBLER_IDLE_W: power threshold for 'idle' (default 5)\n- TUMBLER_FINISHING_MIN: minutes before 'finishing' transitions to 'done' (default 12)\n- APPLIANCE_PANELS: comma-separated panel IDs (default kitchen)",
+    "env": [
+      { "name": "TUMBLER_RUNNING_W",   "value": "300",     "type": "num" },
+      { "name": "TUMBLER_FINISHING_W", "value": "50",      "type": "num" },
+      { "name": "TUMBLER_IDLE_W",      "value": "5",       "type": "num" },
+      { "name": "TUMBLER_FINISHING_MIN","value": "12",     "type": "num" },
+      { "name": "APPLIANCE_PANELS",    "value": "kitchen", "type": "str" }
+    ]
+  },
+
+  {
+    "id": "mqtt_broker_appliances",
+    "type": "mqtt-broker",
+    "name": "Dashboard Broker (Appliances)",
+    "broker": "localhost",
+    "port": "1883",
+    "clientid": "nodered_appliances",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+
+  {
+    "id": "appl_tumbler_power_in",
+    "type": "mqtt in",
+    "z": "appl_tab",
+    "name": "Tumbler Leistung",
+    "topic": "home/power/tumbler_w",
+    "qos": "1",
+    "datatype": "auto-detect",
+    "broker": "mqtt_broker_appliances",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 120,
+    "y": 80,
+    "wires": [["fn_tumbler_statemachine"]]
+  },
+
+  {
+    "id": "fn_tumbler_statemachine",
+    "type": "function",
+    "z": "appl_tab",
+    "name": "Tumbler State Machine",
+    "func": "// State machine for tumbler/dryer\n// States: idle → running → finishing → done\n// 'finishing' = low-power drum-tumbling after program ends (keeps clothes fluffy)\n\nconst RUNNING_W   = parseFloat(env.get('TUMBLER_RUNNING_W')  || '300')\nconst FINISHING_W = parseFloat(env.get('TUMBLER_FINISHING_W') || '50')\nconst IDLE_W      = parseFloat(env.get('TUMBLER_IDLE_W')      || '5')\nconst FINISHING_TIMEOUT_MS = parseFloat(env.get('TUMBLER_FINISHING_MIN') || '12') * 60000\nconst PANELS = (env.get('APPLIANCE_PANELS') || 'kitchen').split(',').map(s => s.trim())\n\nconst power = parseFloat(msg.payload) || 0\nconst now = Date.now()\n\nlet state      = flow.get('tumbler_state')      || 'idle'\nlet since      = flow.get('tumbler_since')      || now\nlet finishTime = flow.get('tumbler_finishTime') || null\n\nlet newState = state\n\nif (power >= RUNNING_W) {\n    // High power = definitely running\n    if (state !== 'running') {\n        newState = 'running'\n        since = now\n        finishTime = null\n    }\n} else if (power <= IDLE_W) {\n    if (state === 'finishing') {\n        // Was in finishing — check if timeout expired\n        if (finishTime && (now - finishTime) >= FINISHING_TIMEOUT_MS) {\n            newState = 'done'\n            since = now\n        }\n        // else: stay in finishing, timeout not yet reached\n    } else if (state === 'running') {\n        // Power dropped from running straight to idle (fast programs)\n        newState = 'finishing'\n        since = now\n        finishTime = now\n    }\n    // idle stays idle\n} else if (power > IDLE_W && power < RUNNING_W) {\n    // Medium power = finishing phase (drum tumbling without heat)\n    if (state === 'running') {\n        newState = 'finishing'\n        since = now\n        finishTime = now\n    } else if (state === 'finishing') {\n        // Still in finishing — reset timer if power went back up slightly\n        if (power > FINISHING_W) finishTime = now\n    }\n}\n\nflow.set('tumbler_state', newState)\nflow.set('tumbler_since', since)\nflow.set('tumbler_finishTime', finishTime)\n\n// Only publish when state changes\nif (newState === state && newState !== 'finishing') return null\n\nmsg.applianceId = 'tumbler'\nmsg.panels = PANELS\nmsg.panelIndex = 0\nmsg.appliancePayload = {\n    state: newState,\n    power: Math.round(power),\n    since: new Date(since).toISOString()\n}\nreturn msg",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 340,
+    "y": 80,
+    "wires": [["fn_appl_publish_loop"]]
+  },
+
+  {
+    "id": "fn_appl_publish_loop",
+    "type": "function",
+    "z": "appl_tab",
+    "name": "Publish Loop (alle Panels)",
+    "func": "const panels = msg.panels\nconst i = msg.panelIndex\nif (i >= panels.length) return null\nmsg.topic = `dashboard/panels/${panels[i]}/appliances/${msg.applianceId}/state`\nmsg.payload = msg.appliancePayload\nmsg.qos = 1\nmsg.retain = true\nmsg.panelIndex = i + 1\nif (i + 1 < panels.length) {\n    node.send([msg, msg])\n} else {\n    node.send([msg, null])\n}",
+    "outputs": 2,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 580,
+    "y": 140,
+    "wires": [["appl_mqtt_out"], ["fn_appl_publish_loop"]]
+  },
+
+  {
+    "id": "appl_mqtt_out",
+    "type": "mqtt out",
+    "z": "appl_tab",
+    "name": "MQTT Publish",
+    "topic": "",
+    "qos": "1",
+    "retain": "true",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt_broker_appliances",
+    "x": 800,
+    "y": 140,
+    "wires": []
+  },
+
+  {
+    "id": "appl_wm_state_in",
+    "type": "mqtt in",
+    "z": "appl_tab",
+    "name": "Waschmaschine State (HA / manuell)",
+    "topic": "home/appliances/waschmaschine/state",
+    "qos": "1",
+    "datatype": "auto-detect",
+    "broker": "mqtt_broker_appliances",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 140,
+    "y": 240,
+    "wires": [["fn_wm_normalize"]]
+  },
+
+  {
+    "id": "fn_wm_normalize",
+    "type": "function",
+    "z": "appl_tab",
+    "name": "Normalize WM State",
+    "func": "const PANELS = (env.get('APPLIANCE_PANELS') || 'kitchen').split(',').map(s => s.trim())\nconst now = new Date().toISOString()\n\nlet raw = msg.payload\nif (typeof raw === 'string') {\n    try { raw = JSON.parse(raw) } catch { raw = { state: raw } }\n}\n\nconst validStates = ['idle', 'running', 'finishing', 'done']\nlet state = 'idle'\nif (raw && typeof raw === 'object') {\n    const s = (raw.state || raw.status || '').toLowerCase()\n    state = validStates.includes(s) ? s : 'idle'\n} else if (typeof raw === 'string') {\n    const s = raw.toLowerCase()\n    state = validStates.includes(s) ? s : 'idle'\n}\n\nmsg.applianceId = 'waschmaschine'\nmsg.panels = PANELS\nmsg.panelIndex = 0\nmsg.appliancePayload = {\n    state: state,\n    power: (raw && typeof raw === 'object' && raw.power != null) ? raw.power : null,\n    since: (raw && typeof raw === 'object' && raw.since) ? raw.since : now\n}\nreturn msg",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 360,
+    "y": 240,
+    "wires": [["fn_appl_publish_loop"]]
+  },
+
+  {
+    "id": "appl_test_inject",
+    "type": "inject",
+    "z": "appl_tab",
+    "name": "Test: WM running",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "home/appliances/waschmaschine/state",
+    "payload": "{\"state\": \"running\"}",
+    "payloadType": "json",
+    "x": 140,
+    "y": 300,
+    "wires": [["fn_wm_normalize"]]
+  }
+]

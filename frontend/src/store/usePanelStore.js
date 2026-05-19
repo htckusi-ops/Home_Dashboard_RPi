@@ -62,6 +62,12 @@ const usePanelStore = create((set, get) => ({
   // Weather
   weather_data: null,
 
+  // Lights  { [id]: 'on' | 'off' | 'unknown' }
+  light_states: {},
+
+  // Appliances  { [id]: { state: 'idle'|'running'|'finishing'|'done', power: number|null, since: string|null } }
+  appliance_states: {},
+
   // Audio
   audio_volume: 80,
   audio_muted: false,
@@ -152,6 +158,14 @@ const usePanelStore = create((set, get) => ({
 
   setDoorbellRing: (camera_id) => set({ doorbell_active: true, doorbell_camera_id: camera_id ?? null }),
   clearDoorbellRing: () => set({ doorbell_active: false, doorbell_camera_id: null }),
+
+  setLightState: (id, state) => set((s) => ({
+    light_states: { ...s.light_states, [id]: state },
+  })),
+
+  setApplianceState: (id, data) => set((s) => ({
+    appliance_states: { ...s.appliance_states, [id]: data },
+  })),
 
   setCalendarOverrides: (overrides) => {
     try {

@@ -70,6 +70,27 @@
     "location": "Zürich",
     "country": "CH"
   },
+  "lights": [
+    { "id": "licht_garten",   "name": "Licht Garten",   "icon": "💡", "color": "#f59e0b" },
+    { "id": "licht_terrasse", "name": "Licht Terrasse", "icon": "💡", "color": "#f59e0b" },
+    { "id": "licht_brunnen",  "name": "Licht Brunnen",  "icon": "🫧", "color": "#3b82f6" }
+  ],
+  "appliances": [
+    {
+      "id": "tumbler",
+      "name": "Tumbler",
+      "icon": "🌀",
+      "power_topic": "home/power/tumbler_w",
+      "notify_done": true
+    },
+    {
+      "id": "waschmaschine",
+      "name": "Waschmaschine",
+      "icon": "👕",
+      "power_topic": null,
+      "notify_done": true
+    }
+  ],
   "sensors": {
     "ticker": {
       "enabled": true,

@@ -13,6 +13,7 @@ import HomeAssistantView from './views/HomeAssistantView.jsx'
 import CalendarView from './views/CalendarView.jsx'
 import SensorsView from './views/SensorsView.jsx'
 import WeatherView from './views/WeatherView.jsx'
+import SmartHomeView from './views/SmartHomeView.jsx'
 
 function ViewRouter() {
   const { current_view } = usePanelStore()
@@ -36,6 +37,8 @@ function ViewRouter() {
       return <SensorsView />
     case 'weather':
       return <WeatherView />
+    case 'smarthome':
+      return <SmartHomeView />
     case 'main_menu':
     default:
       return <MainMenuView />

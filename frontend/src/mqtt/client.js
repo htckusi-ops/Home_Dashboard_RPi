@@ -139,6 +139,23 @@ function handleMessage(topic, payload) {
     return
   }
 
+  // Light-Topics: topic → lightId lookup
+  const lightId = lightTopicMap[topic]
+  if (lightId !== undefined) {
+    const state = typeof data === 'object' ? (data.state ?? data) : data
+    store.setLightState(lightId, String(state).toLowerCase())
+    return
+  }
+
+  // Appliance-Topics: topic → applianceId lookup
+  const applianceId = applianceTopicMap[topic]
+  if (applianceId !== undefined) {
+    if (data && typeof data === 'object') {
+      store.setApplianceState(applianceId, data)
+    }
+    return
+  }
+
   // Sensor-Topics: topic → sensorId lookup
   const sensorId = sensorTopicMap[topic]
   if (sensorId !== undefined) {
@@ -150,6 +167,10 @@ function handleMessage(topic, payload) {
 // Map topic → sensorId, built once per initMqtt call
 let sensorTopicMap = {}
 
+// Map topic → lightId / applianceId, built once per initMqtt call
+let lightTopicMap = {}
+let applianceTopicMap = {}
+
 function buildSensorTopicMap(config) {
   const map = {}
   for (const group of Object.values(config?.sensors?.groups ?? {})) {
@@ -160,10 +181,28 @@ function buildSensorTopicMap(config) {
   return map
 }
 
+function buildLightTopicMap(config) {
+  const map = {}
+  for (const light of config?.lights ?? []) {
+    map[`${getTopicPrefix()}/lights/${light.id}/state`] = light.id
+  }
+  return map
+}
+
+function buildApplianceTopicMap(config) {
+  const map = {}
+  for (const appl of config?.appliances ?? []) {
+    map[`${getTopicPrefix()}/appliances/${appl.id}/state`] = appl.id
+  }
+  return map
+}
+
 function initMqtt(config) {
   panelId = config.panel_id
   brokerUrl = config.mqtt.broker
   sensorTopicMap = buildSensorTopicMap(config)
+  lightTopicMap = buildLightTopicMap(config)
+  applianceTopicMap = buildApplianceTopicMap(config)
 
   const { setMqttStatus } = usePanelStore.getState()
 
@@ -178,9 +217,11 @@ function initMqtt(config) {
   client.on('connect', () => {
     setMqttStatus('connected')
     const topics = buildSubscriptions()
-    // Sensor topics abonnieren
+    // Sensor / light / appliance topics abonnieren
     const sensorTopics = Object.keys(sensorTopicMap)
-    const allTopics = sensorTopics.length ? [...topics, ...sensorTopics] : topics
+    const lightTopics = Object.keys(lightTopicMap)
+    const applianceTopics = Object.keys(applianceTopicMap)
+    const allTopics = [...topics, ...sensorTopics, ...lightTopics, ...applianceTopics]
     client.subscribe(allTopics, { qos: 1 }, (err) => {
       if (err) console.error('MQTT subscribe error:', err)
     })

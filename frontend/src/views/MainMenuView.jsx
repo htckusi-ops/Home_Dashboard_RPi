@@ -5,12 +5,13 @@ import CalendarWidget from '../components/CalendarWidget/index.js'
 import WeatherWidget from '../components/WeatherWidget/WeatherWidget.jsx'
 
 const NAV_ITEMS = [
-  { view: 'music',    label: 'Musik',    icon: '🎵' },
-  { view: 'climate',  label: 'Klima',    icon: '🌡️' },
-  { view: 'cameras',  label: 'Kameras',  icon: '📷' },
-  { view: 'morning',  label: 'Morgen',   icon: '🌅' },
-  { view: 'calendar', label: 'Kalender', icon: '📅' },
-  { view: 'sensors',  label: 'Sensoren', icon: '⚡' },
+  { view: 'music',     label: 'Musik',      icon: '🎵' },
+  { view: 'climate',   label: 'Klima',      icon: '🌡️' },
+  { view: 'cameras',   label: 'Kameras',    icon: '📷' },
+  { view: 'morning',   label: 'Morgen',     icon: '🌅' },
+  { view: 'calendar',  label: 'Kalender',   icon: '📅' },
+  { view: 'sensors',   label: 'Sensoren',   icon: '⚡' },
+  { view: 'smarthome', label: 'Smart Home', icon: '🏠' },
 ]
 
 function NavButton({ item, onClick }) {
