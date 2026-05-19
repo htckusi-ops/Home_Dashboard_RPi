@@ -1,5 +1,6 @@
 import mqtt from 'mqtt'
 import usePanelStore from '../store/usePanelStore.js'
+import { playDoorbellChime } from '../utils/audio.js'
 
 let client = null
 let panelId = null
@@ -23,6 +24,8 @@ function buildSubscriptions() {
     `${prefix}/keyboard/show`,
     `${prefix}/calendar/state`,
     `${prefix}/weather/state`,
+    `${prefix}/audio/state`,
+    `${prefix}/doorbell/ring`,
     'dashboard/settings/global',
   ]
 }
@@ -112,6 +115,20 @@ function handleMessage(topic, payload) {
     if (data && typeof data === 'object') {
       store.setWeatherData(data)
     }
+    return
+  }
+
+  if (topic === `${prefix}/audio/state`) {
+    if (data && typeof data === 'object') {
+      store.setAudioState(data)
+    }
+    return
+  }
+
+  if (topic === `${prefix}/doorbell/ring`) {
+    const cameraId = data?.camera_id ?? null
+    store.setDoorbellRing(cameraId)
+    playDoorbellChime()
     return
   }
 

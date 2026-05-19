@@ -102,6 +102,31 @@ ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/dashboard
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl enable nginx && systemctl restart nginx
 
+log "Audio-Agent installieren..."
+MQTT_BROKER_HOST=$(jq -r '.mqtt.broker // "localhost"' "${DASHBOARD_DIR}/frontend/public/panel.json" 2>/dev/null \
+    | sed 's|ws://||;s|wss://||;s|:.*||' || echo "localhost")
+PANEL_ID=$(jq -r '.panel_id // "kitchen"' "${DASHBOARD_DIR}/frontend/public/panel.json" 2>/dev/null || echo "kitchen")
+
+cat > /etc/systemd/system/dashboard-audio.service << EOF
+[Unit]
+Description=Dashboard Audio Agent
+After=network.target sound.target
+
+[Service]
+Type=simple
+User=${KIOSK_USER}
+Environment=MQTT_BROKER=${MQTT_BROKER_HOST}
+Environment=DASHBOARD_PANEL_ID=${PANEL_ID}
+ExecStart=${DASHBOARD_DIR}/scripts/audio_agent.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable dashboard-audio
+
 log "Autostart für Kiosk-Modus konfigurieren..."
 AUTOSTART_DIR="/home/${KIOSK_USER}/.config/autostart"
 mkdir -p "$AUTOSTART_DIR"

@@ -6,6 +6,8 @@ export default function QuickEdgeMenu() {
     blanking_suppressed,
     blanking_suppressed_until,
     wake_on_motion,
+    audio_volume,
+    audio_muted,
     closeQuickMenu,
     config,
   } = usePanelStore()
@@ -131,6 +133,39 @@ export default function QuickEdgeMenu() {
             >
               🌙 Bildschirm ausschalten
             </button>
+          </section>
+
+          <section className="bg-gray-900 rounded-xl p-4 border border-gray-700">
+            <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Audio</p>
+            <div className="flex items-center gap-3">
+              <button
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center bg-gray-700 hover:bg-gray-600 rounded-lg text-xl"
+                onPointerDown={() =>
+                  publishPanel('audio/set', { volume: audio_volume, muted: !audio_muted })
+                }
+                aria-label={audio_muted ? 'Ton einschalten' : 'Ton ausschalten'}
+              >
+                {audio_muted ? '🔇' : '🔊'}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={audio_volume}
+                className="flex-1 min-h-[44px] accent-indigo-500"
+                onChange={(e) =>
+                  publishPanel('audio/set', {
+                    volume: parseInt(e.target.value),
+                    muted: audio_muted,
+                  })
+                }
+                aria-label="Lautstärke"
+              />
+              <span className="text-white text-sm font-semibold w-8 text-right">
+                {audio_volume}
+              </span>
+            </div>
           </section>
         </div>
       </aside>

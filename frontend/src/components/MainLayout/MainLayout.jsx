@@ -6,6 +6,7 @@ import PinPad from '../PinPad/PinPad.jsx'
 import OnScreenKeyboard from '../OnScreenKeyboard/OnScreenKeyboard.jsx'
 import CameraOverrideView from '../CameraOverrideView/CameraOverrideView.jsx'
 import SensorTicker from '../SensorDisplay/SensorTicker.jsx'
+import DoorbellNotification from '../DoorbellNotification/DoorbellNotification.jsx'
 
 /**
  * @param {{ children: React.ReactNode }} props
@@ -21,9 +22,11 @@ export default function MainLayout({ children }) {
     active_override,
     mqtt_status,
     config,
+    doorbell_active,
     openQuickMenu,
     showPinPad,
     clearAdultSession,
+    clearDoorbellRing,
   } = usePanelStore()
 
   useEffect(() => {
@@ -130,6 +133,7 @@ export default function MainLayout({ children }) {
       {active_override && active_override.type === 'camera' && (
         <CameraOverrideView override={active_override} />
       )}
+      {doorbell_active && <DoorbellNotification />}
     </div>
   )
 }

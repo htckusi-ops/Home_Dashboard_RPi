@@ -62,6 +62,14 @@ const usePanelStore = create((set, get) => ({
   // Weather
   weather_data: null,
 
+  // Audio
+  audio_volume: 80,
+  audio_muted: false,
+
+  // Doorbell
+  doorbell_active: false,
+  doorbell_camera_id: null,
+
   setConfig: (config) => set({
     config,
     panel_id: config.panel_id,
@@ -137,6 +145,13 @@ const usePanelStore = create((set, get) => ({
     })),
 
   setWeatherData: (weather_data) => set({ weather_data }),
+
+  setAudioVolume: (audio_volume) => set({ audio_volume }),
+  setAudioMuted: (audio_muted) => set({ audio_muted }),
+  setAudioState: ({ volume, muted }) => set({ audio_volume: volume, audio_muted: muted }),
+
+  setDoorbellRing: (camera_id) => set({ doorbell_active: true, doorbell_camera_id: camera_id ?? null }),
+  clearDoorbellRing: () => set({ doorbell_active: false, doorbell_camera_id: null }),
 
   setCalendarOverrides: (overrides) => {
     try {
