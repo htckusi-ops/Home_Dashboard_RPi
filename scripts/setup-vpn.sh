@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -z "$BASH_VERSION" ]; then
+    echo "ERROR: Bitte mit bash ausführen: sudo bash $0" >&2
+    exit 1
+fi
+
 # VPN-Setup für das Dashboard-Panel.
 # Importiert ein pfSense-exportiertes .ovpn-Profil und richtet den
 # systemd-verwalteten OpenVPN-Client ein.

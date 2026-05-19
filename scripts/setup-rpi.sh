@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -z "$BASH_VERSION" ]; then
+    echo "ERROR: Bitte mit bash ausführen: sudo bash $0" >&2
+    exit 1
+fi
+
 # Einmalig auszuführendes Setup-Skript für den Raspberry Pi 5 als Kiosk-Display.
 # MQTT-Broker und Node-RED laufen auf der zentralen Infrastruktur, nicht hier.
 # Dieses Skript richtet nur das Display-Panel ein.

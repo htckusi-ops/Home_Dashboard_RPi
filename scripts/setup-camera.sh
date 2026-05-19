@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+if [ -z "$BASH_VERSION" ]; then
+    echo "ERROR: Bitte mit bash ausführen: sudo bash $0" >&2
+    exit 1
+fi
+
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CAMERA_DIR="$REPO_DIR/camera"
 SERVICE_NAME="dashboard-camera"

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -z "$BASH_VERSION" ]; then
+    echo "ERROR: Bitte mit bash ausführen: sudo bash $0" >&2
+    exit 1
+fi
+
 DASHBOARD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONTEND_PORT=5173
 DISPLAY_VAR="${DISPLAY:-:0}"
