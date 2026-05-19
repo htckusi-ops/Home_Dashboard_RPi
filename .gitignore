@@ -2,3 +2,8 @@ frontend/node_modules/
 frontend/dist/
 docker/.env
 *.log
+
+# Lokale Panel-Konfiguration — nie durch git überschreiben.
+# Vorlage: frontend/public/panel.example.json
+frontend/public/panel.json
+

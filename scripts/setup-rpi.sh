@@ -66,6 +66,14 @@ if [[ -f /boot/firmware/cmdline.txt ]]; then
     fi
 fi
 
+log "Panel-Konfiguration prüfen..."
+PANEL_JSON="${DASHBOARD_DIR}/frontend/public/panel.json"
+PANEL_EXAMPLE="${DASHBOARD_DIR}/frontend/public/panel.example.json"
+if [ ! -f "${PANEL_JSON}" ]; then
+    cp "${PANEL_EXAMPLE}" "${PANEL_JSON}"
+    log "panel.json aus panel.example.json erstellt — bitte mqtt.broker und panel_id anpassen."
+fi
+
 log "Frontend-Abhängigkeiten installieren und bauen..."
 cd "${DASHBOARD_DIR}/frontend"
 npm install --silent
@@ -76,8 +84,8 @@ log "Nginx konfigurieren (statisches Frontend ausliefern)..."
 
 # Listen-Adresse aus panel.json lesen — Standard: 127.0.0.1 (nur lokal).
 # Auf "0.0.0.0" setzen um das Interface im Netzwerk erreichbar zu machen.
-LISTEN_ADDR=$(jq -r '.network.listen // "127.0.0.1"' \
-    "${DASHBOARD_DIR}/frontend/public/panel.json" 2>/dev/null || echo "127.0.0.1")
+LISTEN_ADDR=$(jq -r '.network.listen // "0.0.0.0"' \
+    "${PANEL_JSON}" 2>/dev/null || echo "0.0.0.0")
 
 # Nur erlaubte Werte akzeptieren
 case "$LISTEN_ADDR" in
@@ -103,9 +111,9 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl enable nginx && systemctl restart nginx
 
 log "Audio-Agent installieren..."
-MQTT_BROKER_HOST=$(jq -r '.mqtt.broker // "localhost"' "${DASHBOARD_DIR}/frontend/public/panel.json" 2>/dev/null \
+MQTT_BROKER_HOST=$(jq -r '.mqtt.broker // "localhost"' "${PANEL_JSON}" 2>/dev/null \
     | sed 's|ws://||;s|wss://||;s|:.*||' || echo "localhost")
-PANEL_ID=$(jq -r '.panel_id // "kitchen"' "${DASHBOARD_DIR}/frontend/public/panel.json" 2>/dev/null || echo "kitchen")
+PANEL_ID=$(jq -r '.panel_id // "kitchen"' "${PANEL_JSON}" 2>/dev/null || echo "kitchen")
 
 cat > /etc/systemd/system/dashboard-audio.service << EOF
 [Unit]
@@ -144,11 +152,12 @@ log ""
 log "Setup abgeschlossen!"
 log ""
 log "Nächste Schritte:"
-log "  1. frontend/public/panel.json anpassen:"
+log "  1. frontend/public/panel.json anpassen (wird NICHT durch git pull überschrieben):"
 log "     - mqtt.broker auf den zentralen MQTT-Broker zeigen lassen"
 log "       z.B. ws://homeserver.local:9001"
 log "     - panel_id, Kameras, Szenen, etc. konfigurieren"
-log "  2. npm run build im frontend/ ausführen"
+log "     - network.listen: '0.0.0.0' = überall erreichbar, '127.0.0.1' = nur lokal"
+log "  2. Nach Änderungen an panel.json: npm run build && sudo systemctl reload nginx"
 log "  3. (Optional) WiFi konfigurieren:"
 log "     sudo ./scripts/setup-wifi.sh --ssid 'Heimnetzwerk' --password 'geheim'"
 log "  4. (Optional) VPN für externen Zugriff:"
