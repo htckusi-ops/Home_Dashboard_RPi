@@ -164,7 +164,7 @@ const usePanelStore = create((set, get) => ({
   })),
 
   setApplianceState: (id, data) => set((s) => ({
-    appliance_states: { ...s.appliance_states, [id]: data },
+    appliance_states: { ...s.appliance_states, [id]: { ...data, received_at: Date.now() } },
   })),
 
   setCalendarOverrides: (overrides) => {

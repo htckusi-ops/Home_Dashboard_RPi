@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import usePanelStore from '../store/usePanelStore.js'
 import { publishPanel } from '../mqtt/client.js'
 
@@ -82,6 +83,77 @@ const APPLIANCE_STYLES = {
   },
 }
 
+function formatRemaining(secs) {
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  return h > 0 ? `${h} h ${m} min` : `${m} min`
+}
+
+const TRIGGER_LABEL = {
+  humidity:    'Feuchte',
+  temperature: 'Temperatur',
+  tumbler:     'Tumbler',
+  washing:     'Waschmaschine',
+  manual:      'Manuell',
+}
+
+function VentilatorCard({ appl }) {
+  const appliance_states = usePanelStore((s) => s.appliance_states)
+  const data = appliance_states[appl.id] ?? {}
+  const isOn = data.state === 'on'
+  const mode = data.mode ?? 'off'
+
+  const [remaining, setRemaining] = useState(null)
+
+  useEffect(() => {
+    if (mode !== 'manual' || !data.remaining_seconds || !data.received_at) {
+      setRemaining(null)
+      return
+    }
+    const update = () => {
+      const elapsed = (Date.now() - data.received_at) / 1000
+      setRemaining(Math.max(0, Math.round(data.remaining_seconds - elapsed)))
+    }
+    update()
+    const id = setInterval(update, 10_000)
+    return () => clearInterval(id)
+  }, [mode, data.remaining_seconds, data.received_at])
+
+  const subtitle =
+    mode === 'manual' && remaining != null
+      ? `Manuell – noch ${formatRemaining(remaining)}`
+      : mode === 'auto'
+      ? `Auto – ${TRIGGER_LABEL[data.trigger] ?? ''}`
+      : 'Aus'
+
+  function toggle() {
+    publishPanel(`appliances/${appl.id}/set`, { action: 'toggle' })
+  }
+
+  return (
+    <button
+      onPointerDown={toggle}
+      className={[
+        'col-span-2 min-h-[72px] rounded-2xl border flex items-center justify-between px-4 gap-3 transition-colors text-left',
+        isOn
+          ? 'bg-blue-900/40 border-blue-700'
+          : 'bg-gray-800 border-gray-700',
+      ].join(' ')}
+    >
+      <div className="flex items-center gap-3">
+        <span className="text-3xl" role="img" aria-hidden="true">{appl.icon}</span>
+        <div>
+          <p className="font-medium text-sm text-white">{appl.name}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+        </div>
+      </div>
+      <span className={`text-xs font-bold uppercase tracking-wide shrink-0 ${isOn ? 'text-blue-300' : 'text-gray-500'}`}>
+        {isOn ? 'AN' : 'AUS'}
+      </span>
+    </button>
+  )
+}
+
 function ApplianceCard({ appliance, status }) {
   const st = status?.state
   const styles = APPLIANCE_STYLES[st] ?? null
@@ -122,8 +194,9 @@ function ApplianceCard({ appliance, status }) {
 export default function SmartHomeView() {
   const { config, light_states, appliance_states } = usePanelStore()
 
-  const lights     = config?.lights     ?? []
-  const appliances = config?.appliances ?? []
+  const lights      = config?.lights     ?? []
+  const appliances  = (config?.appliances ?? []).filter((a) => a.type !== 'ventilator')
+  const ventilators = (config?.appliances ?? []).filter((a) => a.type === 'ventilator')
 
   function goBack() {
     publishPanel('view/set', 'main_menu')
@@ -179,7 +252,20 @@ export default function SmartHomeView() {
           </section>
         )}
 
-        {lights.length === 0 && appliances.length === 0 && (
+        {ventilators.length > 0 && (
+          <section>
+            <h2 className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">
+              Lüftung
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+              {ventilators.map((appl) => (
+                <VentilatorCard key={appl.id} appl={appl} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {lights.length === 0 && appliances.length === 0 && ventilators.length === 0 && (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm p-8 text-center">
             Keine Lichter oder Geräte konfiguriert.<br />
             <code>lights</code> und <code>appliances</code> in panel.json anlegen.

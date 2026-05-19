@@ -89,6 +89,13 @@
       "icon": "👕",
       "power_topic": null,
       "notify_done": true
+    },
+    {
+      "id": "ventilator_waschkueche",
+      "name": "Lüfter Waschküche",
+      "icon": "💨",
+      "type": "ventilator",
+      "manual_timer_seconds": 7200
     }
   ],
   "sensors": {
@@ -182,6 +189,26 @@
             "factor": 0.001,
             "decimals": 2,
             "stale_minutes": 5
+          }
+        }
+      },
+      "waschkueche": {
+        "label": "Waschküche",
+        "sensors": {
+          "temp_waschkueche": {
+            "label": "Temperatur",
+            "topic": "zigbee2mqtt/sensor_waschkueche/temperature",
+            "unit": "°C",
+            "decimals": 1,
+            "stale_minutes": 15
+          },
+          "humidity_waschkueche": {
+            "label": "Feuchte WK",
+            "topic": "zigbee2mqtt/sensor_waschkueche/humidity",
+            "unit": "%",
+            "decimals": 0,
+            "stale_minutes": 15,
+            "ticker": true
           }
         }
       }
