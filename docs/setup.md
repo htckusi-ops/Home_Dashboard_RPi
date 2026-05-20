@@ -10,6 +10,8 @@ Vollständige Anleitung zur Einrichtung des Smart Home Dashboard auf einem Raspb
 - Zentralserver mit Docker (separater Host — nicht der RPi)
 - pfSense-Router mit OpenVPN-Server (optional, für VPN-Zugriff)
 
+Skripte müssen mit `bash` ausgeführt werden, nicht mit `sh`.
+
 ## 1. Zentralserver einrichten
 
 Der Zentralserver hostet Mosquitto (MQTT), Node-RED und Grafana.
@@ -34,9 +36,12 @@ Dienste nach dem Start:
 1. Node-RED UI öffnen: `http://zentralserver:1880/red`
 2. Hamburger-Menü → **Import**
 3. Dateien der Reihe nach importieren und deployen:
-   - `node-red/flows/flows.json` — Basis-Flow (Panel-Steuerung, PIN, Szenen)
-   - `node-red/flows/calendar-addon.json` — Kalender-Integration
-   - `node-red/flows/weather-addon.json` — Wetter-Integration
+   - `node-red/flows/flows.json` — Basis-Flow (Panel-Steuerung, PIN, Szenen, Sonos, Audio)
+   - `node-red/flows/calendar-addon.json` — Kalender-Integration (Google, Nextcloud, Office 365)
+   - `node-red/flows/weather-addon.json` — Wetter-Integration (Open-Meteo / MeteoSwiss ICON)
+   - `node-red/flows/doorbell-addon.json` — Türklingel-Erkennung (Zigbee/Shelly)
+   - `node-red/flows/appliances-addon.json` — Tumbler/Waschmaschine Zustandserkennung
+   - `node-red/flows/laundry-addon.json` — Waschküche-Lüfter Automatik (optional)
 
 ## 2. Raspberry Pi einrichten
 
@@ -45,7 +50,8 @@ Dienste nach dem Start:
 git clone <repo-url> /home/pi/Home_Dashboard_RPi
 cd /home/pi/Home_Dashboard_RPi
 
-# panel.json konfigurieren (MQTT-Broker-URL, Panel-ID)
+# panel.json aus Vorlage erstellen und anpassen (wird nie durch git pull überschrieben)
+cp frontend/public/panel.example.json frontend/public/panel.json
 nano frontend/public/panel.json
 ```
 
@@ -64,14 +70,14 @@ Wichtigste Felder in `panel.json`:
 Einmaliges RPi-Setup ausführen:
 
 ```bash
-sudo ./scripts/setup-rpi.sh
+sudo bash ./scripts/setup-rpi.sh
 sudo reboot
 ```
 
 Das Setup-Skript:
 - Installiert Chromium, Nginx, Node.js
 - Baut das React-Frontend (`npm run build`)
-- Richtet Nginx als statischen Server ein (bindet an `127.0.0.1:4173` per Standard)
+- Richtet Nginx als statischen Server ein (bindet an `0.0.0.0:4173` per Standard)
 - Richtet den Chromium-Kiosk als systemd-Service ein
 
 Nach dem Neustart startet Chromium automatisch im Kiosk-Modus.
@@ -114,8 +120,8 @@ Details: [weather.md](weather.md)
 
 ```
 [Zentralserver]                    [Raspberry Pi 5]
- Docker Compose                     panel.json konfigurieren
-   Mosquitto (MQTT)        ←——→     setup-rpi.sh ausführen
+ Docker Compose                     panel.json aus Vorlage erstellen
+   Mosquitto (MQTT)        ←——→     sudo bash ./scripts/setup-rpi.sh
    Node-RED                         Neustart → Kiosk startet
    Grafana
    
@@ -123,13 +129,16 @@ Details: [weather.md](weather.md)
    flows.json (Basis)
    calendar-addon.json
    weather-addon.json
+   doorbell-addon.json
+   appliances-addon.json
+   laundry-addon.json (optional)
 ```
 
 ## Aktualisierung
 
 ```bash
 cd /home/pi/Home_Dashboard_RPi
-git pull
+git pull          # panel.json wird nie überschrieben (gitignored)
 cd frontend && npm run build
 sudo systemctl reload nginx
 ```
@@ -149,3 +158,28 @@ docker compose logs -f nodered
 # MQTT-Verbindungstest (Zentralserver)
 mosquitto_sub -h localhost -p 1883 -t 'dashboard/#' -v
 ```
+
+## Optionale Komponenten
+
+### RPi-Kamera (Bewegungserkennung, Gesichtserkennung)
+
+```bash
+sudo bash ./scripts/setup-camera.sh
+```
+
+Details: [camera-agent.md](camera-agent.md)
+
+### Audio-Lautstärke via Dashboard
+
+Wird automatisch durch `setup-rpi.sh` installiert (`dashboard-audio.service`).  
+Steuert den HDMI-Audio-Ausgang via `pactl`.
+
+### Türklingel-Integration
+
+Node-RED Flow `doorbell-addon.json` importieren.  
+Details und Hardwareoptionen: [doorbell-sensor.md](doorbell-sensor.md)
+
+### Waschküche-Unterverteiler mit Lüftersteuerung
+
+Node-RED Flow `laundry-addon.json` importieren.  
+Details: [laundry-panel.md](laundry-panel.md)

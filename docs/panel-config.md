@@ -3,6 +3,10 @@
 Die Datei `frontend/public/panel.json` ist die zentrale Laufzeitkonfiguration jedes Panels.
 Sie wird beim Start vom Browser geladen und nicht im Build eingebettet — Änderungen gelten sofort nach Seiten-Reload.
 
+> **Wichtig:** `panel.json` ist in `.gitignore` eingetragen und wird nie durch `git pull`
+> überschrieben. Die Vorlage liegt unter `frontend/public/panel.example.json`.
+> Beim ersten `setup-rpi.sh`-Lauf wird `panel.json` automatisch aus der Vorlage erstellt.
+
 ## Vollständiges Beispiel
 
 ```json
@@ -11,7 +15,7 @@ Sie wird beim Start vom Browser geladen und nicht im Build eingebettet — Ände
   "panel_name": "Küche",
 
   "network": {
-    "listen": "127.0.0.1",
+    "listen": "0.0.0.0",
     "profile": "eth-wan",
     "wan_iface": "eth0",
     "ap_iface": "wlan0",
@@ -51,7 +55,10 @@ Sie wird beim Start vom Browser geladen und nicht im Build eingebettet — Ände
   "cameras": {
     "entrance": {
       "url": "http://zoneminder.local/zm/index.php?view=live&mid=1",
-      "name": "Eingang"
+      "name": "Eingang",
+      "icon": "🚪",
+      "tap_seconds": 30,
+      "hold_seconds": 0
     }
   },
 
@@ -65,6 +72,17 @@ Sie wird beim Start vom Browser geladen und nicht im Build eingebettet — Ände
       "name": "Home Assistant"
     }
   },
+
+  "lights": [
+    { "id": "licht_garten",   "name": "Licht Garten",   "icon": "💡", "color": "#f59e0b" },
+    { "id": "licht_terrasse", "name": "Licht Terrasse", "icon": "💡", "color": "#f59e0b" },
+    { "id": "licht_brunnen",  "name": "Licht Brunnen",  "icon": "🫧", "color": "#3b82f6" }
+  ],
+  "appliances": [
+    { "id": "tumbler",      "name": "Tumbler",       "icon": "🌀", "power_topic": "home/power/tumbler_w", "notify_done": true },
+    { "id": "waschmaschine","name": "Waschmaschine", "icon": "👕", "power_topic": null, "notify_done": true },
+    { "id": "ventilator_waschkueche", "name": "Lüfter Waschküche", "icon": "💨", "type": "ventilator", "manual_timer_seconds": 7200 }
+  ],
 
   "scenes": [
     { "id": "yoga", "name": "Yoga", "icon": "🧘", "color": "#6366f1" }
@@ -147,6 +165,47 @@ Sie wird beim Start vom Browser geladen und nicht im Build eingebettet — Ände
 |------|-----|-------------|
 | `broker` | string | WebSocket-URL des MQTT-Brokers: `ws://host:9001` |
 | `clientId` | string | MQTT-Client-ID (muss eindeutig pro Panel sein) |
+
+### `cameras`
+
+| Feld | Typ | Standard | Beschreibung |
+|------|-----|---------|-------------|
+| `<id>.url` | string | — | Stream-URL (iframe, ZoneMinder, RTSP-Proxy) |
+| `<id>.name` | string | — | Anzeigename |
+| `<id>.icon` | string | `📷` | Emoji-Icon |
+| `<id>.tap_seconds` | number | 30 | Anzeigedauer bei kurzem Tippen |
+| `<id>.hold_seconds` | number | 0 | Anzeigedauer bei Halten (0 = Daueransicht) |
+
+Kamera-Schnellaufruf-Buttons erscheinen im Hauptmenü und in der Kameras-Ansicht.  
+**Tippen** öffnet den Stream für `tap_seconds`, **Halten (0.9 s)** öffnet ihn ohne Timer.
+
+### `lights`
+
+Array von steuerbaren Lichtern (Toggle via MQTT).
+
+| Feld | Typ | Beschreibung |
+|------|-----|-------------|
+| `id` | string | Eindeutige ID; MQTT-Topic: `lights/<id>/set` und `lights/<id>/state` |
+| `name` | string | Anzeigename |
+| `icon` | string | Emoji-Icon |
+| `color` | string | Hex-Farbe für den AN-Zustand |
+
+### `appliances`
+
+Array von Geräten mit Zustandsanzeige.
+
+| Feld | Typ | Beschreibung |
+|------|-----|-------------|
+| `id` | string | Eindeutige ID |
+| `name` | string | Anzeigename |
+| `icon` | string | Emoji-Icon |
+| `type` | string | `"ventilator"` für automatisch gesteuerte Lüfter (Sonderdarstellung mit Timer) |
+| `power_topic` | string\|null | MQTT-Topic für Leistungsmessung (W) |
+| `notify_done` | bool | Benachrichtigung wenn Gerät fertig |
+| `manual_timer_seconds` | number | Manuelle Laufzeit für Lüfter (default 7200 = 2h) |
+
+Gerätezustände: `idle` · `running` · `finishing` · `done`  
+Lüfter-Zustände: `off` · `auto` · `manual` (+ `remaining_seconds`)
 
 ### `display`
 

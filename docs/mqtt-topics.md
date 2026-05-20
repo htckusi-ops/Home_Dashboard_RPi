@@ -16,7 +16,7 @@ Alle Panel-Topics haben das Präfix `dashboard/panels/<panel_id>/`.
 | `view/set` | Frontend → NR | View-Name | View anfordern |
 | `view/state` | NR → Frontend | View-Name | Bestätigter aktueller View |
 
-Gültige View-Namen: `main_menu`, `music`, `climate`, `cameras`, `grafana`, `homeassistant`, `morning`, `calendar`, `sensors`, `weather`
+Gültige View-Namen: `main_menu`, `music`, `climate`, `cameras`, `grafana`, `homeassistant`, `morning`, `calendar`, `sensors`, `weather`, `smarthome`
 
 ## Authentifizierung
 
@@ -51,9 +51,40 @@ Gültige View-Namen: `main_menu`, `music`, `climate`, `cameras`, `grafana`, `hom
 
 | Topic | Richtung | Payload | Beschreibung |
 |-------|----------|---------|-------------|
-| `override/camera/set` | Frontend → NR | `{ camera_id, camera_url, camera_name, duration_seconds }` | Kamera-Vollbild zeigen |
+| `override/camera/set` | Frontend → NR | `{ camera_id, camera_url, camera_name, duration_seconds }` | Kamera-Vollbild zeigen (`duration_seconds: 0` = Daueransicht, kein Auto-Close) |
 | `override/state` | NR → Frontend | `{ type, camera_id, ... }\|null` | Aktiver Override |
 | `override/restore` | Frontend → NR | `{ reason }` | Override aufheben |
+
+## Lichter
+
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|-------------|
+| `lights/<id>/set` | Frontend → NR | `"on"\|"off"` | Licht schalten |
+| `lights/<id>/state` | NR → Frontend | `"on"\|"off"` | Bestätigter Zustand |
+
+## Geräte & Lüftung
+
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|-------------|
+| `appliances/<id>/state` | NR → Frontend | `{ state, power?, since?, mode?, trigger?, remaining_seconds? }` | Gerätezustand |
+| `appliances/<id>/set` | Frontend → NR | `{ action: "toggle" }` | Lüfter manuell toggle |
+
+Geräte-Zustände: `idle` · `running` · `finishing` · `done`  
+Lüfter-Zustände: `off` · `auto` (Automatik) · `manual` (2h-Timer)  
+Lüfter-Trigger: `humidity` · `temperature` · `tumbler` · `washing` · `manual`
+
+## Audio (HDMI)
+
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|-------------|
+| `audio/set` | Frontend → NR | `{ action: "volume", value: 80 }\|{ action: "mute" }\|{ action: "unmute" }` | Lautstärke / Mute |
+| `audio/state` | NR → Frontend | `{ volume: 80, muted: false }` | Aktueller Audio-Zustand |
+
+## Türklingel
+
+| Topic | Richtung | Payload | Beschreibung |
+|-------|----------|---------|-------------|
+| `doorbell/ring` | NR → Frontend | `{ camera_id? }` | Klingelereignis → Ton + Kamera-Override |
 
 ## Kalender
 
@@ -109,6 +140,13 @@ dashboard/
       override/camera/set    ← Frontend → NR
       override/restore       ← Frontend → NR
       keyboard/show          ← NR → Frontend
+      lights/<id>/state      ← NR → Frontend
+      lights/<id>/set        ← Frontend → NR
+      appliances/<id>/state  ← NR → Frontend
+      appliances/<id>/set    ← Frontend → NR
+      audio/state            ← NR → Frontend
+      audio/set              ← Frontend → NR (via audio_agent.sh)
+      doorbell/ring          ← NR → Frontend
       calendar/state         ← NR → Frontend
       calendar/profile/set   ← Frontend → NR
       weather/state          ← NR → Frontend

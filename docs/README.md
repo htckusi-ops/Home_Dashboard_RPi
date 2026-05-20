@@ -13,6 +13,10 @@ Alle Anleitungen und Referenzen für das Raspberry Pi 5 Kiosk-Dashboard.
 | [weather.md](weather.md) | Wetter-Integration (Open-Meteo / MeteoSwiss ICON) |
 | [calendar.md](calendar.md) | Kalender-Integration (Google, Nextcloud, Office 365) |
 | [network.md](network.md) | Netzwerk-Profile, VPN, WiFi, LAN-Routing |
+| [camera-agent.md](camera-agent.md) | RPi-Kamera: Bewegungserkennung, Gesichtserkennung, Wake-on-Motion |
+| [doorbell-sensor.md](doorbell-sensor.md) | Türklingel-Sensor: Hardwareoptionen für 6V-Stromkreise |
+| [washing-machine-sensor.md](washing-machine-sensor.md) | Waschmaschinen-Sensor: Typ-15-Steckdose, Shelly Pro 3EM |
+| [laundry-panel.md](laundry-panel.md) | Unterverteiler Waschküche: Energiemessung, Lüftersteuerung |
 | [screenshots/](screenshots/) | UI-Screenshots (800×480, RPi 7" Touchscreen) |
 
 ## UI-Screenshots
@@ -27,3 +31,5 @@ Aufgenommen bei 800×480 px (RPi 7" Touchscreen).
 | ![Wetter](screenshots/06_weather_view.png) | Wetter-Vollansicht (7-Tage-Forecast) |
 | ![Kalender](screenshots/07_calendar_view.png) | Kalender-Wochenansicht |
 | ![Quick-Menü](screenshots/08_quick_menu.png) | Quick-Edge-Menü |
+| ![Smart-Home-View](screenshots/09_smarthome_view.png) | Smart-Home-View: Lichter, Geräte, Lüftung |
+| ![Kameras-View](screenshots/10_cameras_view.png) | Kameras-View: Tap/Hold-Schnellaufruf |
