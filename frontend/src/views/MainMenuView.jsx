@@ -3,6 +3,7 @@ import { publishPanel } from '../mqtt/client.js'
 import SceneButtons from '../components/SceneButtons/SceneButtons.jsx'
 import CalendarWidget from '../components/CalendarWidget/index.js'
 import WeatherWidget from '../components/WeatherWidget/WeatherWidget.jsx'
+import CameraButton from '../components/CameraButton/CameraButton.jsx'
 
 const NAV_ITEMS = [
   { view: 'music',     label: 'Musik',      icon: '🎵' },
@@ -28,6 +29,7 @@ function NavButton({ item, onClick }) {
 
 export default function MainMenuView() {
   const { mode, config, weather_data } = usePanelStore()
+  const cameras = config?.cameras ? Object.entries(config.cameras) : []
   const hasCalendars = Boolean(config?.calendars?.sources && Object.keys(config.calendars.sources).length)
   const hasWeather = Boolean(weather_data?.current)
 
@@ -57,6 +59,17 @@ export default function MainMenuView() {
             </>
           )}
         </div>
+
+        {cameras.length > 0 && (
+          <div className="px-4 pb-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-2 px-1">Kamera-Schnellaufruf</p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {cameras.map(([id, camera]) => (
+                <CameraButton key={id} cameraId={id} camera={camera} compact />
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="px-4 pb-4">
           <p className="text-xs text-gray-500 uppercase tracking-wide mb-3 px-1">Szenen</p>

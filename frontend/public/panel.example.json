@@ -38,7 +38,10 @@
   "cameras": {
     "entrance": {
       "url": "http://zoneminder.local/zm/index.php?view=live&mid=1",
-      "name": "Eingang"
+      "name": "Eingang",
+      "icon": "🚪",
+      "tap_seconds": 30,
+      "hold_seconds": 0
     }
   },
   "embeds": {

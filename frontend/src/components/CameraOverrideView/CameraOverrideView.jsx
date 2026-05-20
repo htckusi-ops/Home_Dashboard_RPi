@@ -29,6 +29,7 @@ export default function CameraOverrideView({ override }) {
 
   const cameraUrl = override.camera_url || ''
 
+  const indefinite = !override.expires_at
   const mins = Math.floor(secondsLeft / 60)
   const secs = secondsLeft % 60
   const timeDisplay = mins > 0
@@ -45,11 +46,11 @@ export default function CameraOverrideView({ override }) {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          {secondsLeft > 0 && (
-            <span className="text-gray-400 text-sm">
-              Schließt in {timeDisplay}
-            </span>
-          )}
+          {indefinite ? (
+            <span className="text-blue-400 text-sm">🔒 Daueransicht</span>
+          ) : secondsLeft > 0 ? (
+            <span className="text-gray-400 text-sm">Schließt in {timeDisplay}</span>
+          ) : null}
           <button
             className="min-h-[48px] min-w-[48px] px-4 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium"
             onPointerDown={handleClose}
